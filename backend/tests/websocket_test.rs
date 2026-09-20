@@ -1,10 +1,14 @@
+use backend::application::state::AppState;
+use backend::infrastructure::web::create_router;
 use futures::{sink::SinkExt, stream::StreamExt};
+use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message as TungsteniteMessage};
 
 #[tokio::test]
 async fn test_ping_pong_websocket() {
-    let app = backend::app();
+    let state = Arc::new(AppState::default());
+    let app = create_router(state);
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
