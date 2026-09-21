@@ -45,6 +45,7 @@ export default function LoginPage() {
               },
             }}
             providers={["github", "google", "discord"]}
+            redirectTo={typeof window !== "undefined" ? `${window.location.origin}/auth/callback` : undefined}
             theme="dark"
           />
         </CardContent>
