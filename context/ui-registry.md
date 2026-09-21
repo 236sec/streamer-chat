@@ -13,3 +13,4 @@ Tracks every UI component built.
 | Sheet | `frontend/src/components/ui/sheet.tsx` | Mobile-responsive sidebar drawer | shadcn/ui |
 | Topbar | `frontend/src/components/layout/topbar.tsx` | Persistent top navigation bar | Shell Pattern |
 | Sidebar | `frontend/src/components/layout/sidebar.tsx` | Persistent left navigation menu | Shell Pattern |
+| WidgetClient | `frontend/src/components/widget/WidgetClient.tsx` | Connects to WS and renders dummy chat messages for OBS | Custom Hook |
