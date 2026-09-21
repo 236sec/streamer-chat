@@ -1,7 +1,0 @@
-/Users/best/.gemini/antigravity-cli/brain/5c03ccce-4020-4711-b7c9-22ff1d09271b/.system_generated/worktrees/subagent-Build-Agent---Ticket-02-self-ace0544f/backend/target/debug/deps/signal_hook_registry-71ff652ef1d5e8ac.d: /Users/best/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/signal-hook-registry-1.4.8/src/lib.rs /Users/best/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/signal-hook-registry-1.4.8/src/half_lock.rs /Users/best/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/signal-hook-registry-1.4.8/src/vec_map.rs
-
-/Users/best/.gemini/antigravity-cli/brain/5c03ccce-4020-4711-b7c9-22ff1d09271b/.system_generated/worktrees/subagent-Build-Agent---Ticket-02-self-ace0544f/backend/target/debug/deps/libsignal_hook_registry-71ff652ef1d5e8ac.rmeta: /Users/best/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/signal-hook-registry-1.4.8/src/lib.rs /Users/best/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/signal-hook-registry-1.4.8/src/half_lock.rs /Users/best/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/signal-hook-registry-1.4.8/src/vec_map.rs
-
-/Users/best/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/signal-hook-registry-1.4.8/src/lib.rs:
-/Users/best/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/signal-hook-registry-1.4.8/src/half_lock.rs:
-/Users/best/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/signal-hook-registry-1.4.8/src/vec_map.rs:
