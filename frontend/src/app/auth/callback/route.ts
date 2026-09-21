@@ -25,7 +25,7 @@ export async function GET(request: Request) {
               cookiesToSet.forEach(({ name, value, options }) =>
                 cookieStore.set(name, value, options)
               );
-            } catch (_error) {
+            } catch {
             }
           },
         },

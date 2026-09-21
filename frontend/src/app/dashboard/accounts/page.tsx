@@ -30,7 +30,7 @@ export default function AccountsPage() {
     if (platform === 'kick') providerName = 'kick';
     
     await supabase.auth.linkIdentity({
-      provider: providerName as any,
+      provider: providerName as "twitch" | "google" | "github",
       options: {
         redirectTo: `${window.location.origin}/auth/callback?next=/dashboard/accounts&provider=${platform}`,
         scopes: platform === 'youtube' ? 'https://www.googleapis.com/auth/youtube.readonly' : undefined

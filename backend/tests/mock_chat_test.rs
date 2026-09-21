@@ -30,5 +30,5 @@ async fn test_mock_chat_broadcasting() {
 
     let text = msg.to_text().unwrap();
     let json: serde_json::Value = serde_json::from_str(text).unwrap();
-    assert_eq!(json["type"], "mock_message");
+    assert_eq!(json["type"], "chat_message");
 }

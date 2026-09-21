@@ -87,11 +87,11 @@ Every ticket uses this structure:
 
 **Blocked by:** 04: Real Twitch/YouTube/Kick Integration
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Connect to Twitch EventSub or IRC using the decrypted OAuth token.
-- [ ] Parse incoming Twitch message payloads into the `ChatMessage` schema.
-- [ ] Stream parsed messages to the live widget connection over WebSocket.
+- [x] Connect to Twitch EventSub or IRC using the decrypted OAuth token.
+- [x] Parse incoming Twitch message payloads into the `ChatMessage` schema.
+- [x] Stream parsed messages to the live widget connection over WebSocket.
 
 ---
 
@@ -101,7 +101,7 @@ Every ticket uses this structure:
 
 **Blocked by:** 04: Real Twitch/YouTube/Kick Integration
 
-**Status:** blocked
+**Status:** ready-for-agent
 
 - [ ] Call YouTube Live Chat API using the decrypted Google OAuth token.
 - [ ] Parse incoming YouTube chat payloads into the `ChatMessage` schema.
