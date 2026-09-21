@@ -19,7 +19,11 @@ impl Default for AppState {
 }
 
 impl AppState {
-    pub async fn get_or_create_channel(&self, widget_id: &str) -> broadcast::Sender<String> {
+    pub async fn get_or_create_channel(
+        &self,
+        widget_id: &str,
+        mock: bool,
+    ) -> broadcast::Sender<String> {
         let channels = self.widget_channels.read().await;
         if let Some(sender) = channels.get(widget_id) {
             return sender.clone();
@@ -32,7 +36,7 @@ impl AppState {
             .or_insert_with(|| {
                 let (tx, _) = broadcast::channel(100);
 
-                if std::env::var("MOCK_CHAT").unwrap_or_else(|_| "false".to_string()) == "true" {
+                if mock {
                     let tx_clone = tx.clone();
                     let w_id = widget_id.to_string();
                     tokio::spawn(async move {

@@ -6,10 +6,14 @@ interface PageProps {
   params: Promise<{
     id: string;
   }>;
+  searchParams: Promise<{
+    [key: string]: string | string[] | undefined;
+  }>;
 }
 
 export default async function WidgetPage(props: PageProps) {
   const params = await props.params;
+  const searchParams = await props.searchParams;
   const { id } = params;
   
   const supabase = await createClient();
@@ -25,12 +29,15 @@ export default async function WidgetPage(props: PageProps) {
     notFound();
   }
 
+  const mock = searchParams.mock === "true";
+
   return (
     <WidgetClient
       widgetId={widget.id}
       theme={widget.theme}
       fontSize={widget.font_size}
       backgroundColor={widget.background_color}
+      mock={mock}
     />
   );
 }

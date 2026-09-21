@@ -16,9 +16,10 @@ interface WidgetClientProps {
   theme: string;
   fontSize: string;
   backgroundColor: string;
+  mock?: boolean;
 }
 
-export function WidgetClient({ widgetId, theme, fontSize, backgroundColor }: WidgetClientProps) {
+export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock }: WidgetClientProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const wsRef = useRef<WebSocket | null>(null);
 
@@ -39,7 +40,7 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor }: Wid
 
     const connect = () => {
       // Connect to the WebSocket URL, e.g. ws://127.0.0.1:3000/ws/widget/:id
-      const wsUrl = `${env.NEXT_PUBLIC_WS_URL}/widget/${widgetId}`;
+      const wsUrl = `${env.NEXT_PUBLIC_WS_URL}/widget/${widgetId}${mock ? '?mock=true' : ''}`;
       ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -77,7 +78,7 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor }: Wid
         wsRef.current.close();
       }
     };
-  }, [widgetId]);
+  }, [widgetId, mock]);
 
   return (
     <div
