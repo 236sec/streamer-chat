@@ -24,6 +24,8 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock 
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
+    if (mock) return;
+
     document.body.style.backgroundColor = backgroundColor || "transparent";
     // Also remove the default Next.js background class if it exists
     document.body.classList.remove("bg-background");
@@ -32,15 +34,37 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock 
       document.body.style.backgroundColor = "";
       document.body.classList.add("bg-background");
     };
-  }, [backgroundColor]);
+  }, [backgroundColor, mock]);
 
   useEffect(() => {
     let ws: WebSocket;
     let reconnectTimer: NodeJS.Timeout;
+    let mockInterval: NodeJS.Timeout;
+
+    if (mock) {
+      // Frontend mock logic
+      let count = 0;
+      mockInterval = setInterval(() => {
+        count++;
+        setMessages((prev) => {
+          const newMessages = [...prev, {
+            id: `mock-${Date.now()}-${count}`,
+            author: count % 2 === 0 ? "StreamFan" : "CoolGamer99",
+            content: `This is mock message #${count} to preview your widget styling!`,
+            color: count % 2 === 0 ? "#8a2be2" : "#ff4500"
+          }];
+          if (newMessages.length > 50) {
+            return newMessages.slice(newMessages.length - 50);
+          }
+          return newMessages;
+        });
+      }, 2000);
+      return () => clearInterval(mockInterval);
+    }
 
     const connect = () => {
       // Connect to the WebSocket URL, e.g. ws://127.0.0.1:3000/ws/widget/:id
-      const wsUrl = `${env.NEXT_PUBLIC_WS_URL}/widget/${widgetId}${mock ? '?mock=true' : ''}`;
+      const wsUrl = `${env.NEXT_PUBLIC_WS_URL}/widget/${widgetId}`;
       ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -82,7 +106,7 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock 
 
   return (
     <div
-      className={cn("w-full h-screen overflow-hidden flex flex-col justify-end p-4", theme === "dark" && "dark")}
+      className={cn("w-full h-full overflow-hidden flex flex-col justify-end p-4", theme === "dark" && "dark")}
       style={{ backgroundColor: backgroundColor, fontSize: fontSize }}
     >
       <div className="flex flex-col gap-2">
