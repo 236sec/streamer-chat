@@ -24,22 +24,11 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock 
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    if (mock) return;
-
-    document.body.style.backgroundColor = backgroundColor || "transparent";
-    // Also remove the default Next.js background class if it exists
-    document.body.classList.remove("bg-background");
-    
-    return () => {
-      document.body.style.backgroundColor = "";
-      document.body.classList.add("bg-background");
-    };
-  }, [backgroundColor, mock]);
-
-  useEffect(() => {
     let ws: WebSocket;
     let reconnectTimer: NodeJS.Timeout;
     let mockInterval: NodeJS.Timeout;
+    let reconnectAttempts = 0;
+    const maxReconnectDelay = 30000;
 
     if (mock) {
       // Frontend mock logic
@@ -84,9 +73,15 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock 
         }
       };
 
+      ws.onopen = () => {
+        reconnectAttempts = 0;
+      };
+
       ws.onclose = () => {
-        // Automatically reconnect after 2 seconds
-        reconnectTimer = setTimeout(connect, 2000);
+        // Exponential backoff
+        const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), maxReconnectDelay);
+        reconnectAttempts++;
+        reconnectTimer = setTimeout(connect, delay);
       };
 
       ws.onerror = (error) => {
@@ -106,8 +101,8 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock 
 
   return (
     <div
-      className={cn("w-full h-full overflow-hidden flex flex-col justify-end p-4", theme === "dark" && "dark")}
-      style={{ backgroundColor: backgroundColor, fontSize: fontSize }}
+      className={cn("absolute inset-0 overflow-hidden flex flex-col justify-end p-4", theme === "dark" && "dark")}
+      style={{ backgroundColor: backgroundColor || "transparent", fontSize: fontSize }}
     >
       <div className="flex flex-col gap-2">
         {messages.map((msg) => (

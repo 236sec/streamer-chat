@@ -1,16 +1,32 @@
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+
 export default function DashboardPage() {
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-3xl font-heading font-bold text-foreground">Dashboard</h1>
+      <p className="text-muted-foreground">Welcome to StreamSync. Select an option below to get started.</p>
+      
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="p-6 bg-card rounded-lg border border-border">
-          <h2 className="text-xl font-semibold mb-2">Connected Accounts</h2>
-          <p className="text-muted-foreground">Manage your Twitch, YouTube, and Kick integrations.</p>
-        </div>
-        <div className="p-6 bg-card rounded-lg border border-border">
-          <h2 className="text-xl font-semibold mb-2">Widget Settings</h2>
-          <p className="text-muted-foreground">Configure how your chat overlay looks on OBS.</p>
-        </div>
+        <Link href="/dashboard/accounts" className="block group">
+          <div className="p-6 bg-card rounded-lg border border-border h-full transition-colors group-hover:border-primary">
+            <h2 className="text-xl font-semibold mb-2 flex items-center justify-between">
+              Connected Accounts
+              <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+            </h2>
+            <p className="text-muted-foreground">Manage your Twitch, YouTube, and Kick integrations.</p>
+          </div>
+        </Link>
+        
+        <Link href="/dashboard/widget" className="block group">
+          <div className="p-6 bg-card rounded-lg border border-border h-full transition-colors group-hover:border-primary">
+            <h2 className="text-xl font-semibold mb-2 flex items-center justify-between">
+              Widget Settings
+              <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+            </h2>
+            <p className="text-muted-foreground">Configure how your chat overlay looks on OBS.</p>
+          </div>
+        </Link>
       </div>
     </div>
   );

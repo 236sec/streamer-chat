@@ -81,6 +81,46 @@ Every ticket uses this structure:
 - [ ] Rust backend ingesting Kick chat events
 - [ ] Messages correctly routed to the user's specific widget ID
 
+## 05: Rust Backend Twitch Chat Ingestion
+
+**What to build:** Implement the actual async Twitch IRC/WebSocket client in the Rust backend to consume live chat messages, parse them, and stream them to the connected Next.js widget.
+
+**Blocked by:** 04: Real Twitch/YouTube/Kick Integration
+
+**Status:** ready-for-agent
+
+- [ ] Connect to Twitch EventSub or IRC using the decrypted OAuth token.
+- [ ] Parse incoming Twitch message payloads into the `ChatMessage` schema.
+- [ ] Stream parsed messages to the live widget connection over WebSocket.
+
+---
+
+## 06: Rust Backend YouTube Chat Ingestion
+
+**What to build:** Implement the async YouTube Live Chat API polling loop in the Rust backend.
+
+**Blocked by:** 04: Real Twitch/YouTube/Kick Integration
+
+**Status:** blocked
+
+- [ ] Call YouTube Live Chat API using the decrypted Google OAuth token.
+- [ ] Parse incoming YouTube chat payloads into the `ChatMessage` schema.
+- [ ] Stream parsed messages to the live widget connection.
+
+---
+
+## 07: Rust Backend Kick Chat Ingestion
+
+**What to build:** Implement the async Kick WebSocket or API client to consume Kick chat messages.
+
+**Blocked by:** 04: Real Twitch/YouTube/Kick Integration
+
+**Status:** blocked
+
+- [ ] Connect to Kick's chat service.
+- [ ] Parse incoming Kick message payloads into the `ChatMessage` schema.
+- [ ] Stream parsed messages to the live widget connection.
+
 ---
 
 ## Verification Commands

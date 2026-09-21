@@ -4,8 +4,11 @@ use serde::{Deserialize, Serialize};
 pub struct ChatMessage {
     pub r#type: String,
     pub widget_id: Option<String>,
-    pub author: Option<String>,
-    pub content: Option<String>,
+    pub platform: Option<String>,
+    pub username: Option<String>,
+    pub avatar_url: Option<String>,
+    pub badges: Option<Vec<String>>,
+    pub message: Option<String>,
 }
 
 impl ChatMessage {
@@ -13,8 +16,11 @@ impl ChatMessage {
         Self {
             r#type: "mock_message".to_string(),
             widget_id: Some(widget_id.to_string()),
-            author: Some("MockBot".to_string()),
-            content: Some("This is a dummy message".to_string()),
+            platform: Some("mock".to_string()),
+            username: Some("MockBot".to_string()),
+            avatar_url: None,
+            badges: Some(vec![]),
+            message: Some("This is a dummy message".to_string()),
         }
     }
 }

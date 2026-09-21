@@ -33,6 +33,10 @@
   --radius-lg: var(--radius-lg);
   --radius-xl: var(--radius-xl);
   --radius-2xl: var(--radius-2xl);
+  
+  --color-twitch: var(--twitch);
+  --color-youtube: var(--youtube);
+  --color-kick: var(--kick);
 }
 
 :root {
@@ -60,6 +64,10 @@
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
+  
+  --twitch: #9146FF;
+  --youtube: #FF0000;
+  --kick: #53FC18;
 }
 
 .dark {
@@ -81,6 +89,10 @@
   --input: oklch(40% 0.01 250);
   --ring: oklch(65% 0.2 290);
   --destructive: oklch(60% 0.2 20);
+  
+  --twitch: #9146FF;
+  --youtube: #FF0000;
+  --kick: #53FC18;
 }
 
 @layer base {
