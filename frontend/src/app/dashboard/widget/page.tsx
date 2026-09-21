@@ -10,6 +10,8 @@ export default function WidgetSettingsPage() {
   const [theme, setTheme] = useState("dark");
   const [fontSize, setFontSize] = useState("16px");
   const [backgroundColor, setBackgroundColor] = useState("transparent");
+  const [width, setWidth] = useState("400");
+  const [height, setHeight] = useState("600");
 
   const widgetUrl = `http://localhost:3000/widget/test-user-id?theme=${theme}&fontSize=${encodeURIComponent(fontSize)}&backgroundColor=${encodeURIComponent(backgroundColor)}`;
 
@@ -19,7 +21,7 @@ export default function WidgetSettingsPage() {
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
         {/* Settings Panel */}
-        <div className="p-6 bg-card rounded-lg border border-border flex flex-col gap-6 lg:col-span-1 overflow-y-auto">
+        <div className="p-6 bg-card rounded-lg border border-border flex flex-col gap-6 lg:col-span-1 overflow-y-auto max-h-[calc(100vh-8rem)]">
           <div>
             <h2 className="text-xl font-semibold mb-2">Appearance</h2>
             <p className="text-muted-foreground text-sm mb-4">Configure how your chat overlay looks on OBS.</p>
@@ -60,6 +62,31 @@ export default function WidgetSettingsPage() {
             </div>
           </div>
 
+          <div className="mt-4 pt-4 border-t border-border">
+            <h2 className="text-lg font-semibold mb-2">OBS Source Size</h2>
+            <p className="text-muted-foreground text-sm mb-4">Simulate your OBS browser source dimensions.</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="width">Width (px)</Label>
+                <Input 
+                  id="width" 
+                  type="number"
+                  value={width} 
+                  onChange={(e) => setWidth(e.target.value)} 
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="height">Height (px)</Label>
+                <Input 
+                  id="height" 
+                  type="number"
+                  value={height} 
+                  onChange={(e) => setHeight(e.target.value)} 
+                />
+              </div>
+            </div>
+          </div>
+
           <div className="mt-8">
             <h2 className="text-xl font-semibold mb-2">Widget URL</h2>
             <p className="text-muted-foreground text-sm mb-4">Copy this URL and add it as a Browser Source in OBS.</p>
@@ -75,17 +102,20 @@ export default function WidgetSettingsPage() {
         {/* Preview Panel */}
         <div className="p-6 bg-card rounded-lg border border-border lg:col-span-2 flex flex-col min-h-[500px]">
           <h2 className="text-xl font-semibold mb-4">Live Preview</h2>
-          <div className="flex-1 rounded-md border border-dashed border-border overflow-hidden relative bg-black/5 flex items-center justify-center">
+          <div className="flex-1 rounded-md border border-dashed border-border overflow-auto relative bg-black/5 flex items-center justify-center p-8">
             {/* Checkerboard background for transparent preview */}
             <div 
-              className="absolute inset-0 z-0 opacity-10" 
+              className="absolute inset-0 z-0 opacity-10 pointer-events-none" 
               style={{
                 backgroundImage: 'linear-gradient(45deg, #808080 25%, transparent 25%), linear-gradient(-45deg, #808080 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #808080 75%), linear-gradient(-45deg, transparent 75%, #808080 75%)',
                 backgroundSize: '20px 20px',
                 backgroundPosition: '0 0, 0 10px, 10px -10px, -10px 0px'
               }}
             />
-            <div className="relative z-10 w-full h-full max-w-md mx-auto shadow-2xl border border-border/50">
+            <div 
+              className="relative z-10 shadow-2xl border border-border/50 bg-background/50 flex-shrink-0"
+              style={{ width: `${width}px`, height: `${height}px` }}
+            >
               <WidgetClient 
                 widgetId="test-user-id"
                 theme={theme}
