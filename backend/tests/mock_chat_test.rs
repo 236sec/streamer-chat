@@ -19,7 +19,7 @@ async fn test_mock_chat_broadcasting() {
         axum::serve(listener, app).await.unwrap();
     });
 
-    let ws_url = format!("ws://{}/ws/widget/123", addr);
+    let ws_url = format!("ws://{}/ws/widget/123?mock=true", addr);
     let (mut ws_stream, _) = connect_async(&ws_url).await.expect("Failed to connect");
 
     let timeout = tokio::time::timeout(Duration::from_secs(3), ws_stream.next()).await;

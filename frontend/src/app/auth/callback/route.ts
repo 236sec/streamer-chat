@@ -2,11 +2,13 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { env } from "@/env";
+import crypto from "crypto";
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const next = requestUrl.searchParams.get("next") ?? "/dashboard";
+  const explicitProvider = requestUrl.searchParams.get("provider");
 
   if (code) {
     const cookieStore = await cookies();
@@ -23,17 +25,58 @@ export async function GET(request: Request) {
               cookiesToSet.forEach(({ name, value, options }) =>
                 cookieStore.set(name, value, options)
               );
-            } catch (error) {
-              // The `setAll` method was called from a Server Component.
-              // This can be ignored if you have middleware refreshing
-              // user sessions.
+            } catch (_error) {
             }
           },
         },
       }
     );
     
-    await supabase.auth.exchangeCodeForSession(code);
+    const { data: { session } } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (session && session.provider_token) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // Use the explicit provider passed in the redirect URL if available
+        let platform = explicitProvider;
+        
+        if (!platform) {
+          const currentIdentity = user.identities?.find(i => i.provider !== 'email');
+          platform = currentIdentity?.provider || user.app_metadata?.provider || '';
+          if (platform === 'google') platform = 'youtube';
+        }
+        
+        if (platform) {
+          // Encrypt the token with AES-GCM
+          const rawKey = process.env.MASTER_DECRYPTION_KEY || "0123456789abcdef0123456789abcdef";
+          const key = Buffer.from(rawKey.padEnd(32, '0').slice(0, 32), 'utf8');
+          const iv = crypto.randomBytes(12);
+          const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+          
+          let encrypted = cipher.update(session.provider_token, "utf8", "base64");
+          encrypted += cipher.final("base64");
+          const authTag = cipher.getAuthTag().toString("base64");
+          
+          const encryptedToken = `${iv.toString("base64")}:${authTag}:${encrypted}`;
+
+          // Save to platform_tokens table
+          const { error } = await supabase
+            .from("platform_tokens")
+            .upsert(
+              { 
+                user_id: user.id, 
+                platform, 
+                encrypted_token: encryptedToken 
+              },
+              { onConflict: "user_id,platform" }
+            );
+
+          if (error) {
+            console.error("Failed to save platform token:", error);
+          }
+        }
+      }
+    }
   }
 
   // URL to redirect to after sign in process completes
