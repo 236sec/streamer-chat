@@ -21,7 +21,7 @@ async fn test_ping_pong_websocket() {
 
     let ping_msg = serde_json::json!({ "type": "ping" });
     ws_stream
-        .send(TungsteniteMessage::Text(ping_msg.to_string().into()))
+        .send(TungsteniteMessage::Text(ping_msg.to_string()))
         .await
         .unwrap();
 

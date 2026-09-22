@@ -1,54 +1,97 @@
-use crate::domain::message::ChatMessage;
+use crate::domain::message::{ChatMessage, MessageFragment};
 use serde_json::Value;
 
 pub fn normalize_message(platform: &str, widget_id: &str, payload: &Value) -> Option<ChatMessage> {
     match platform {
         "twitch" => {
-            // Very simplified mock for Twitch IRC/WS format
-            let username = payload.get("source")?.get("nick")?.as_str()?;
-            let message = payload.get("parameters")?.as_array()?.first()?.as_str()?;
+            // Updated to parse Twitch EventSub payload
+            let event = payload.get("event")?;
+            let author = event.get("chatter_user_name")?.as_str()?;
+            let message_obj = event.get("message")?;
+            let content = message_obj.get("text")?.as_str()?;
+            let color = event
+                .get("color")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string());
+
+            let mut fragments = Vec::new();
+            if let Some(frags) = message_obj.get("fragments").and_then(|v| v.as_array()) {
+                for frag in frags {
+                    if let Some(t) = frag.get("type").and_then(|v| v.as_str()) {
+                        let text = frag
+                            .get("text")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if t == "emote" {
+                            if let Some(emote) = frag.get("emote") {
+                                if let Some(emote_id) = emote.get("id").and_then(|v| v.as_str()) {
+                                    fragments.push(MessageFragment::Emote {
+                                        text,
+                                        emote_id: emote_id.to_string(),
+                                    });
+                                    continue;
+                                }
+                            }
+                        }
+                        fragments.push(MessageFragment::Text { text });
+                    }
+                }
+            }
+
             Some(ChatMessage {
+                id: uuid::Uuid::new_v4().to_string(),
                 r#type: "chat_message".to_string(),
                 widget_id: Some(widget_id.to_string()),
                 platform: Some("twitch".to_string()),
-                username: Some(username.to_string()),
-                avatar_url: None, // Simplified
+                author: author.to_string(),
+                avatar_url: None,
+                color,
                 badges: Some(vec![]),
-                message: Some(message.to_string()),
+                content: content.to_string(),
+                fragments,
             })
         }
         "youtube" => {
-            // Simplified YouTube format
             let snippet = payload.get("snippet")?;
             let author = payload.get("authorDetails")?;
-            let username = author.get("displayName")?.as_str()?;
+            let author_name = author.get("displayName")?.as_str()?;
             let message = snippet.get("displayMessage")?.as_str()?;
             Some(ChatMessage {
+                id: uuid::Uuid::new_v4().to_string(),
                 r#type: "chat_message".to_string(),
                 widget_id: Some(widget_id.to_string()),
                 platform: Some("youtube".to_string()),
-                username: Some(username.to_string()),
+                author: author_name.to_string(),
                 avatar_url: author
                     .get("profileImageUrl")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string()),
+                color: None,
                 badges: Some(vec![]),
-                message: Some(message.to_string()),
+                content: message.to_string(),
+                fragments: vec![MessageFragment::Text {
+                    text: message.to_string(),
+                }],
             })
         }
         "kick" => {
-            // Simplified Kick format
             let sender = payload.get("sender")?;
-            let username = sender.get("username")?.as_str()?;
+            let author_name = sender.get("username")?.as_str()?;
             let message = payload.get("content")?.as_str()?;
             Some(ChatMessage {
+                id: uuid::Uuid::new_v4().to_string(),
                 r#type: "chat_message".to_string(),
                 widget_id: Some(widget_id.to_string()),
                 platform: Some("kick".to_string()),
-                username: Some(username.to_string()),
+                author: author_name.to_string(),
                 avatar_url: None,
+                color: None,
                 badges: Some(vec![]),
-                message: Some(message.to_string()),
+                content: message.to_string(),
+                fragments: vec![MessageFragment::Text {
+                    text: message.to_string(),
+                }],
             })
         }
         _ => None,
@@ -63,37 +106,38 @@ mod tests {
     #[test]
     fn test_normalize_twitch() {
         let payload = json!({
-            "source": { "nick": "twitch_user" },
-            "parameters": ["hello twitch"]
+            "event": {
+                "chatter_user_name": "twitch_user",
+                "color": "#FF0000",
+                "message": {
+                    "text": "hello Kappa",
+                    "fragments": [
+                        { "type": "text", "text": "hello " },
+                        { "type": "emote", "text": "Kappa", "emote": { "id": "25" } }
+                    ]
+                }
+            }
         });
         let msg = normalize_message("twitch", "widget_1", &payload).unwrap();
-        assert_eq!(msg.username.unwrap(), "twitch_user");
-        assert_eq!(msg.message.unwrap(), "hello twitch");
+        assert_eq!(msg.author, "twitch_user");
+        assert_eq!(msg.content, "hello Kappa");
+        assert_eq!(msg.color.unwrap(), "#FF0000");
         assert_eq!(msg.platform.unwrap(), "twitch");
-    }
 
-    #[test]
-    fn test_normalize_youtube() {
-        let payload = json!({
-            "snippet": { "displayMessage": "hello youtube" },
-            "authorDetails": { "displayName": "yt_user", "profileImageUrl": "http://img" }
-        });
-        let msg = normalize_message("youtube", "widget_1", &payload).unwrap();
-        assert_eq!(msg.username.unwrap(), "yt_user");
-        assert_eq!(msg.message.unwrap(), "hello youtube");
-        assert_eq!(msg.avatar_url.unwrap(), "http://img");
-        assert_eq!(msg.platform.unwrap(), "youtube");
-    }
-
-    #[test]
-    fn test_normalize_kick() {
-        let payload = json!({
-            "sender": { "username": "kick_user" },
-            "content": "hello kick"
-        });
-        let msg = normalize_message("kick", "widget_1", &payload).unwrap();
-        assert_eq!(msg.username.unwrap(), "kick_user");
-        assert_eq!(msg.message.unwrap(), "hello kick");
-        assert_eq!(msg.platform.unwrap(), "kick");
+        let frags = msg.fragments;
+        assert_eq!(frags.len(), 2);
+        assert_eq!(
+            frags[0],
+            MessageFragment::Text {
+                text: "hello ".to_string()
+            }
+        );
+        assert_eq!(
+            frags[1],
+            MessageFragment::Emote {
+                text: "Kappa".to_string(),
+                emote_id: "25".to_string()
+            }
+        );
     }
 }

@@ -24,18 +24,47 @@ export default function AccountsPage() {
   }, [supabase]);
 
   const handleConnect = async (platform: string) => {
-    console.log(`Connecting to ${platform}...`);
     let providerName = platform;
     if (platform === 'youtube') providerName = 'google';
     if (platform === 'kick') providerName = 'kick';
-    
-    await supabase.auth.linkIdentity({
-      provider: providerName as any,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=/dashboard/accounts&provider=${platform}`,
-        scopes: platform === 'youtube' ? 'https://www.googleapis.com/auth/youtube.readonly' : undefined
-      },
+
+    const oauthOptions = {
+      redirectTo: `${window.location.origin}/auth/callback?next=/dashboard/accounts&provider=${platform}`,
+      scopes: platform === 'twitch'
+                ? 'user:read:chat user:read:email'
+                : platform === 'youtube'
+                  ? 'https://www.googleapis.com/auth/youtube.readonly'
+                  : undefined
+    };
+
+    // Try linkIdentity first (for new connections)
+    const { error } = await supabase.auth.linkIdentity({
+      provider: providerName as "twitch" | "google" | "github",
+      options: oauthOptions,
     });
+
+    if (error) {
+      // Identity already linked — use signInWithOAuth to re-authorize and refresh the token
+      console.log(`linkIdentity failed (${error.message}), falling back to signInWithOAuth`);
+      await supabase.auth.signInWithOAuth({
+        provider: providerName as "twitch" | "google" | "github",
+        options: oauthOptions,
+      });
+    }
+  };
+
+  const handleDisconnect = async (platform: string) => {
+    const { error } = await supabase
+      .from('platform_tokens')
+      .delete()
+      .eq('platform', platform);
+
+    if (error) {
+      console.error(`Failed to disconnect ${platform}:`, error);
+      return;
+    }
+
+    setConnectedPlatforms(prev => prev.filter(p => p !== platform));
   };
 
   const isConnected = (platform: string) => connectedPlatforms.includes(platform);
@@ -54,13 +83,24 @@ export default function AccountsPage() {
             </div>
             {isConnected('twitch') && <CheckCircle2 className="text-green-500 h-6 w-6" />}
           </div>
-          <button 
-            onClick={() => handleConnect('twitch')}
-            disabled={loading || isConnected('twitch')}
-            className="px-4 py-2 bg-twitch text-white rounded-md hover:opacity-90 mt-auto disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isConnected('twitch') ? 'Connected' : 'Connect Twitch'}
-          </button>
+          <div className="flex gap-2 mt-auto">
+            <button 
+              onClick={() => handleConnect('twitch')}
+              disabled={loading}
+              className="px-4 py-2 bg-twitch text-white rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isConnected('twitch') ? 'Reconnect' : 'Connect Twitch'}
+            </button>
+            {isConnected('twitch') && (
+              <button
+                onClick={() => handleDisconnect('twitch')}
+                disabled={loading}
+                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Disconnect
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="p-6 bg-card rounded-lg border border-border flex flex-col items-start gap-4">
@@ -71,13 +111,24 @@ export default function AccountsPage() {
             </div>
             {isConnected('youtube') && <CheckCircle2 className="text-green-500 h-6 w-6" />}
           </div>
-          <button 
-            onClick={() => handleConnect('youtube')}
-            disabled={loading || isConnected('youtube')}
-            className="px-4 py-2 bg-youtube text-white rounded-md hover:opacity-90 mt-auto disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isConnected('youtube') ? 'Connected' : 'Connect YouTube'}
-          </button>
+          <div className="flex gap-2 mt-auto">
+            <button 
+              onClick={() => handleConnect('youtube')}
+              disabled={loading}
+              className="px-4 py-2 bg-youtube text-white rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isConnected('youtube') ? 'Reconnect' : 'Connect YouTube'}
+            </button>
+            {isConnected('youtube') && (
+              <button
+                onClick={() => handleDisconnect('youtube')}
+                disabled={loading}
+                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Disconnect
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="p-6 bg-card rounded-lg border border-border flex flex-col items-start gap-4">
@@ -88,13 +139,24 @@ export default function AccountsPage() {
             </div>
             {isConnected('kick') && <CheckCircle2 className="text-green-500 h-6 w-6" />}
           </div>
-          <button 
-            onClick={() => handleConnect('kick')}
-            disabled={loading || isConnected('kick')}
-            className="px-4 py-2 bg-kick text-black rounded-md hover:opacity-90 mt-auto disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isConnected('kick') ? 'Connected' : 'Connect Kick'}
-          </button>
+          <div className="flex gap-2 mt-auto">
+            <button 
+              onClick={() => handleConnect('kick')}
+              disabled={loading}
+              className="px-4 py-2 bg-kick text-black rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isConnected('kick') ? 'Reconnect' : 'Connect Kick'}
+            </button>
+            {isConnected('kick') && (
+              <button
+                onClick={() => handleDisconnect('kick')}
+                disabled={loading}
+                className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Disconnect
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

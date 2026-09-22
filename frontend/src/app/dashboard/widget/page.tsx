@@ -1,19 +1,47 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { WidgetClient } from "@/components/widget/WidgetClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { createClient } from "@/lib/supabase/client";
 
 export default function WidgetSettingsPage() {
+  const [widgetId, setWidgetId] = useState("loading...");
   const [theme, setTheme] = useState("dark");
   const [fontSize, setFontSize] = useState("16px");
   const [backgroundColor, setBackgroundColor] = useState("transparent");
   const [width, setWidth] = useState("400");
   const [height, setHeight] = useState("600");
 
-  const widgetUrl = `http://localhost:3000/widget/test-user-id?theme=${theme}&fontSize=${encodeURIComponent(fontSize)}&backgroundColor=${encodeURIComponent(backgroundColor)}`;
+  useEffect(() => {
+    const fetchWidget = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("widgets")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (data) {
+        setWidgetId(data.id);
+      } else {
+        const { data: newWidget } = await supabase
+          .from("widgets")
+          .insert({ user_id: user.id })
+          .select("id")
+          .single();
+        if (newWidget) setWidgetId(newWidget.id);
+      }
+    };
+    fetchWidget();
+  }, []);
+
+  const widgetUrl = `http://localhost:3000/widget/${widgetId}?theme=${theme}&fontSize=${encodeURIComponent(fontSize)}&backgroundColor=${encodeURIComponent(backgroundColor)}`;
 
   return (
     <div className="flex flex-col gap-6 h-full">
@@ -117,7 +145,7 @@ export default function WidgetSettingsPage() {
               style={{ width: `${width}px`, height: `${height}px` }}
             >
               <WidgetClient 
-                widgetId="test-user-id"
+                widgetId={widgetId}
                 theme={theme}
                 fontSize={fontSize}
                 backgroundColor={backgroundColor}
