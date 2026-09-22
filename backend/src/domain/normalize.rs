@@ -56,7 +56,15 @@ pub fn normalize_message(platform: &str, widget_id: &str, payload: &Value) -> Op
             let snippet = payload.get("snippet")?;
             let author = payload.get("authorDetails")?;
             let author_name = author.get("displayName")?.as_str()?;
-            let message = snippet.get("displayMessage")?.as_str()?;
+            let message = snippet
+                .get("displayMessage")
+                .and_then(|v| v.as_str())
+                .or_else(|| {
+                    snippet
+                        .get("textMessageDetails")
+                        .and_then(|t| t.get("messageText"))
+                        .and_then(|v| v.as_str())
+                })?;
             Some(ChatMessage {
                 id: uuid::Uuid::new_v4().to_string(),
                 r#type: "chat_message".to_string(),
@@ -136,8 +144,35 @@ mod tests {
             frags[1],
             MessageFragment::Emote {
                 text: "Kappa".to_string(),
-                emote_id: "25".to_string()
+                emote_id: "25".to_string(),
             }
+        );
+    }
+
+    #[test]
+    fn test_normalize_youtube() {
+        let payload = json!({
+            "kind": "youtube#liveChatMessage",
+            "id": "yt_msg_123",
+            "snippet": {
+                "type": "textMessageEvent",
+                "displayMessage": "Hello YouTube chat!"
+            },
+            "authorDetails": {
+                "displayName": "YT Viewer",
+                "profileImageUrl": "https://yt3.ggpht.com/avatar.jpg"
+            }
+        });
+        let msg = normalize_message("youtube", "widget_yt", &payload).unwrap();
+        assert_eq!(msg.author, "YT Viewer");
+        assert_eq!(msg.content, "Hello YouTube chat!");
+        assert_eq!(msg.platform.unwrap(), "youtube");
+        assert_eq!(msg.avatar_url.unwrap(), "https://yt3.ggpht.com/avatar.jpg");
+        assert_eq!(
+            msg.fragments,
+            vec![MessageFragment::Text {
+                text: "Hello YouTube chat!".to_string()
+            }]
         );
     }
 }

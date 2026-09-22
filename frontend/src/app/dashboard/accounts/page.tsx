@@ -34,7 +34,10 @@ export default function AccountsPage() {
                 ? 'user:read:chat user:read:email'
                 : platform === 'youtube'
                   ? 'https://www.googleapis.com/auth/youtube.readonly'
-                  : undefined
+                  : undefined,
+      queryParams: platform === 'youtube'
+        ? { access_type: 'offline', prompt: 'consent' }
+        : undefined,
     };
 
     // Try linkIdentity first (for new connections)

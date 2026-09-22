@@ -104,11 +104,13 @@ Every ticket uses this structure:
 
 **Blocked by:** 04: Real Twitch/YouTube/Kick Integration
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Call YouTube Live Chat API using the decrypted Google OAuth token.
-- [ ] Parse incoming YouTube chat payloads into the `ChatMessage` schema.
-- [ ] Stream parsed messages to the live widget connection.
+- [x] Call YouTube Live Chat API using the decrypted Google OAuth token.
+- [x] Parse incoming YouTube chat payloads into the `ChatMessage` schema.
+- [x] Stream parsed messages to the live widget connection.
+- [x] Handle YouTube live chat startup 404 with retry backoff and video `activeLiveChatId` fallback.
+- [x] Maintain worker lifecycle and reconnect reliability across widget page refreshes.
 
 ---
 

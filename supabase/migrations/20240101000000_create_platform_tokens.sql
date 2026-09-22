@@ -3,6 +3,7 @@ CREATE TABLE platform_tokens (
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   platform TEXT NOT NULL,
   encrypted_token TEXT NOT NULL,
+  encrypted_refresh_token TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(user_id, platform)
