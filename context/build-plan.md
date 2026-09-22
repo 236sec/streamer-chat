@@ -92,6 +92,9 @@ Every ticket uses this structure:
 - [x] Connect to Twitch EventSub or IRC using the decrypted OAuth token.
 - [x] Parse incoming Twitch message payloads into the `ChatMessage` schema.
 - [x] Stream parsed messages to the live widget connection over WebSocket.
+- [x] Dynamically resolve Twitch user ID via Helix API (bugfix: was hardcoded).
+- [x] Request correct OAuth scopes (`user:read:chat`) during Twitch connection (bugfix: was missing).
+- [x] Allow reconnect/disconnect for already-linked platform identities (bugfix: button was permanently disabled).
 
 ---
 
@@ -115,7 +118,7 @@ Every ticket uses this structure:
 
 **Blocked by:** 04: Real Twitch/YouTube/Kick Integration
 
-**Status:** blocked
+**Status:** ready-for-agent
 
 - [ ] Connect to Kick's chat service.
 - [ ] Parse incoming Kick message payloads into the `ChatMessage` schema.
