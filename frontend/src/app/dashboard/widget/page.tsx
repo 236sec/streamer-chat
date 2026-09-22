@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { createClient } from "@/lib/supabase/client";
 
 export default function WidgetSettingsPage() {
-  const [userId, setUserId] = useState("test-user-id");
+  const [widgetId, setWidgetId] = useState("loading...");
   const [theme, setTheme] = useState("dark");
   const [fontSize, setFontSize] = useState("16px");
   const [backgroundColor, setBackgroundColor] = useState("transparent");
@@ -16,15 +16,32 @@ export default function WidgetSettingsPage() {
   const [height, setHeight] = useState("600");
 
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUserId(user.id);
+    const fetchWidget = async () => {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from("widgets")
+        .select("id")
+        .eq("user_id", user.id)
+        .single();
+
+      if (data) {
+        setWidgetId(data.id);
+      } else {
+        const { data: newWidget } = await supabase
+          .from("widgets")
+          .insert({ user_id: user.id })
+          .select("id")
+          .single();
+        if (newWidget) setWidgetId(newWidget.id);
       }
-    });
+    };
+    fetchWidget();
   }, []);
 
-  const widgetUrl = `http://localhost:3000/widget/${userId}?theme=${theme}&fontSize=${encodeURIComponent(fontSize)}&backgroundColor=${encodeURIComponent(backgroundColor)}`;
+  const widgetUrl = `http://localhost:3000/widget/${widgetId}?theme=${theme}&fontSize=${encodeURIComponent(fontSize)}&backgroundColor=${encodeURIComponent(backgroundColor)}`;
 
   return (
     <div className="flex flex-col gap-6 h-full">
@@ -128,7 +145,7 @@ export default function WidgetSettingsPage() {
               style={{ width: `${width}px`, height: `${height}px` }}
             >
               <WidgetClient 
-                widgetId={userId}
+                widgetId={widgetId}
                 theme={theme}
                 fontSize={fontSize}
                 backgroundColor={backgroundColor}
