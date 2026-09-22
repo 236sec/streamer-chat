@@ -47,6 +47,16 @@ async fn handle_socket(
     widget_id: Option<String>,
     mock: bool,
 ) {
+    let connection_type = if let Some(id) = &widget_id {
+        format!("Widget({})", id)
+    } else {
+        "Global".to_string()
+    };
+    println!(
+        "[WebSocket Backend] New connection established: {}",
+        connection_type
+    );
+
     let mut rx = match &widget_id {
         Some(id) => state.get_or_create_channel(id, mock).await.subscribe(),
         None => state.tx.subscribe(),
@@ -59,39 +69,87 @@ async fn handle_socket(
 
     let (mut sender, mut receiver) = socket.split();
 
+    let conn_type_for_send = connection_type.clone();
     let mut send_task = tokio::spawn(async move {
-        while let Ok(msg) = rx.recv().await {
-            if let Err(_e) = sender.send(Message::Text(msg)).await {
-                // Ignore error, it means client disconnected
-                break;
+        loop {
+            match rx.recv().await {
+                Ok(msg) => {
+                    if let Err(e) = sender.send(Message::Text(msg)).await {
+                        eprintln!(
+                            "[WebSocket Backend] Failed to send message to {}: {}",
+                            conn_type_for_send, e
+                        );
+                        break;
+                    }
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                    eprintln!(
+                        "[WebSocket Backend] Receiver lagged by {} messages for {}",
+                        n, conn_type_for_send
+                    );
+                    continue;
+                }
+                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                    break;
+                }
             }
         }
     });
 
+    let conn_type_for_recv = connection_type.clone();
     let mut recv_task = tokio::spawn(async move {
-        while let Some(Ok(msg)) = receiver.next().await {
-            if let Message::Text(text) = msg {
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
-                    if json["type"] == "ping" {
-                        let pong = serde_json::json!({ "type": "pong" });
-                        if let Err(_e) = tx.send(pong.to_string()) {
-                            // ignore error
+        while let Some(result) = receiver.next().await {
+            match result {
+                Ok(msg) => {
+                    if let Message::Text(text) = msg {
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) {
+                            if json["type"] == "ping" {
+                                let pong = serde_json::json!({ "type": "pong" });
+                                if let Err(e) = tx.send(pong.to_string()) {
+                                    eprintln!(
+                                        "[WebSocket Backend] Failed to broadcast pong for {}: {}",
+                                        conn_type_for_recv, e
+                                    );
+                                }
+                            }
                         }
+                    } else if let Message::Close(_) = msg {
+                        println!(
+                            "[WebSocket Backend] Received close frame from {}",
+                            conn_type_for_recv
+                        );
+                        break;
                     }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[WebSocket Backend] Error receiving message from {}: {}",
+                        conn_type_for_recv, e
+                    );
+                    break;
                 }
             }
         }
     });
 
     tokio::select! {
-        _ = (&mut send_task) => recv_task.abort(),
-        _ = (&mut recv_task) => send_task.abort(),
+        _ = (&mut send_task) => {
+            println!("[WebSocket Backend] Send task ended for {}", connection_type);
+            recv_task.abort();
+        },
+        _ = (&mut recv_task) => {
+            println!("[WebSocket Backend] Receive task ended for {}", connection_type);
+            send_task.abort();
+        },
     }
+
+    println!("[WebSocket Backend] Connection closed: {}", connection_type);
 
     if let Some(id) = widget_id {
         let mut channels = state.widget_channels.write().await;
         if let Some(channel) = channels.get(&id) {
             if channel.receiver_count() == 0 {
+                println!("[WebSocket Backend] Cleaning up channel for Widget({})", id);
                 channels.remove(&id);
             }
         }

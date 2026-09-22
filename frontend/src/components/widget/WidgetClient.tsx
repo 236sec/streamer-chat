@@ -34,6 +34,7 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock 
     let reconnectTimer: NodeJS.Timeout;
     let mockInterval: NodeJS.Timeout;
     let reconnectAttempts = 0;
+    let isMounted = true;
     const maxReconnectDelay = 30000;
 
     if (mock) {
@@ -58,12 +59,17 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock 
           return newMessages;
         });
       }, 2000);
-      return () => clearInterval(mockInterval);
+      return () => {
+        clearInterval(mockInterval);
+      };
     }
 
     const connect = () => {
+      if (!isMounted) return;
+      
       // Connect to the WebSocket URL
       const wsUrl = `${env.NEXT_PUBLIC_WS_URL}/widget/${widgetId}`;
+      console.log(`[WebSocket] Attempting to connect to ${wsUrl} (Attempt ${reconnectAttempts + 1})`);
       ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -78,28 +84,38 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock 
             return newMessages;
           });
         } catch (error) {
-          console.error("Failed to parse message", error);
+          console.error("[WebSocket] Failed to parse message", error, "Raw data:", event.data);
         }
       };
 
       ws.onopen = () => {
+        console.log(`[WebSocket] Connected successfully to ${wsUrl}`);
         reconnectAttempts = 0;
       };
 
-      ws.onclose = () => {
+      ws.onclose = (event) => {
+        if (!isMounted) return;
         const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), maxReconnectDelay);
+        console.warn(`[WebSocket] Connection closed. Code: ${event.code}, Reason: ${event.reason || 'None'}, Clean: ${event.wasClean}. Reconnecting in ${delay}ms...`);
         reconnectAttempts++;
         reconnectTimer = setTimeout(connect, delay);
       };
 
       ws.onerror = (error) => {
-        console.error("WebSocket error", error);
+        if (!isMounted) return; // Ignore errors from Strict Mode unmount aborts
+        console.error(`[WebSocket] Error occurred. ReadyState: ${ws.readyState}`);
+        // WebSocket error events don't contain much info due to security reasons, 
+        // but we log what we can.
+        if (error instanceof ErrorEvent) {
+           console.error("[WebSocket] Error message:", error.message);
+        }
       };
     };
 
     connect();
 
     return () => {
+      isMounted = false;
       clearTimeout(reconnectTimer);
       if (wsRef.current) {
         wsRef.current.close();
