@@ -14,3 +14,6 @@ Tracks every UI component built.
 | Topbar | `frontend/src/components/layout/topbar.tsx` | Persistent top navigation bar | Shell Pattern |
 | Sidebar | `frontend/src/components/layout/sidebar.tsx` | Persistent left navigation menu | Shell Pattern |
 | WidgetClient | `frontend/src/components/widget/WidgetClient.tsx` | Connects to WS and renders dummy chat messages for OBS | Custom Hook |
+| Toast | `frontend/src/components/ui/toast.tsx` | Lightweight toast notification provider and useToast hook | Context / Portal Pattern |
+| ObsSetupGuideModal | `frontend/src/components/obs/ObsSetupGuideModal.tsx` | Step-by-step OBS browser source setup guide modal | Modal / Dialog Pattern |
+
