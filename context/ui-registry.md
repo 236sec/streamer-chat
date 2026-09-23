@@ -13,7 +13,7 @@ Tracks every UI component built.
 | Sheet | `frontend/src/components/ui/sheet.tsx` | Mobile-responsive sidebar drawer | shadcn/ui |
 | Topbar | `frontend/src/components/layout/topbar.tsx` | Persistent top navigation bar | Shell Pattern |
 | Sidebar | `frontend/src/components/layout/sidebar.tsx` | Persistent left navigation menu | Shell Pattern |
-| WidgetClient | `frontend/src/components/widget/WidgetClient.tsx` | Connects to WS and renders dummy chat messages for OBS | Custom Hook |
+| WidgetClient | `frontend/src/components/widget/WidgetClient.tsx` | Connects to WS and renders chat overlay with auto-hide lifecycle and layout presets (card, bubble, clean) for OBS | Custom Hook / Transition Pattern |
 | Toast | `frontend/src/components/ui/toast.tsx` | Lightweight toast notification provider and useToast hook | Context / Portal Pattern |
 | ObsSetupGuideModal | `frontend/src/components/obs/ObsSetupGuideModal.tsx` | Step-by-step OBS browser source setup guide modal | Modal / Dialog Pattern |
 

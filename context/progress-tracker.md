@@ -4,7 +4,7 @@
 - None.
 
 ## Frontier Tickets
-- None.
+- 10: Message Highlight Overlay & Dashboard Pin Control
 
 ## In Progress
 - None.
@@ -22,6 +22,7 @@
 - 07-fix: Worker reconnect lifecycle / state redundancy bug fix
 - 08-fix: Kick Pusher reconnect loop fix (CancellationToken & sleep_or_cancel) + token expiry error propagation (WebSocket platform_error, widget alert banner & accounts page token status)
 - 08: Frontend UX and Error Handling (Toast notifications, Supabase widget persistence, dynamic origin URL & copy feedback, 3-step onboarding checklist, OBS setup guide modal, Kick validation, OAuth error banner, token tooltips, disconnect confirm)
+- 09: Chat Overlay Enhancements (Auto-hide duration timer with smooth fade-out CSS transitions, Card/Bubble/Clean layout presets, dashboard settings controls, and live preview synchronization)
 
 ## Blocked
 - None.

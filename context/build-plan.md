@@ -146,6 +146,38 @@ Every ticket uses this structure:
 
 ---
 
+## 09: Chat Overlay Enhancements
+
+**What to build:** Message auto-hide lifespan timer and visual layout presets (Card, Bubble, Clean) configurable in the dashboard and rendered in OBS.
+
+**Blocked by:** 08: Frontend UX and Error Handling
+
+**Status:** done
+
+- [x] Add `auto_hide_seconds` and `layout_style` to widget settings state / DB schema
+- [x] Implement message expiry timer and smooth fade-out animation in `WidgetClient`
+- [x] Add Card, Bubble, and Clean layout styles adhering to UI tokens
+- [x] Add auto-hide duration slider/select and layout style selector in widget settings dashboard page
+- [x] Live preview in dashboard reflects auto-hide timing and layout preset changes
+
+---
+
+## 10: Message Highlight Overlay & Dashboard Pin Control
+
+**What to build:** Interactive chat feed in dashboard with a "Pin to Screen" action, and a dedicated OBS browser source route at `/widget/[id]/highlight` displaying the featured message.
+
+**Blocked by:** 09: Chat Overlay Enhancements
+
+**Status:** ready-for-agent
+
+- [ ] Dedicated public route `/widget/[id]/highlight` in Next.js
+- [ ] WebSocket event handling for `pin_message` and `unpin_message` broadcasts
+- [ ] Highlight overlay component with animated entry/exit and high-contrast card styling
+- [ ] Interactive live chat feed in dashboard allowing streamer to pin and unpin messages
+- [ ] Highlight widget URL copy button and OBS dimensions guide in dashboard
+
+---
+
 ## Verification Commands
 
 | Step | Command | Purpose |

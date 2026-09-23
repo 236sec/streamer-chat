@@ -15,7 +15,7 @@ export default async function WidgetPage(props: PageProps) {
   const params = await props.params;
   const searchParams = await props.searchParams;
   const { id } = params;
-  
+
   const supabase = await createClient();
 
   const { data: widget, error } = await supabase
@@ -30,6 +30,19 @@ export default async function WidgetPage(props: PageProps) {
   }
 
   const mock = searchParams.mock === "true";
+  const autoHideSeconds =
+    typeof searchParams.auto_hide_seconds === "string"
+      ? Number(searchParams.auto_hide_seconds)
+      : widget.auto_hide_seconds !== undefined && widget.auto_hide_seconds !== null
+      ? Number(widget.auto_hide_seconds)
+      : 0;
+
+  const layoutStyle =
+    (typeof searchParams.layout_style === "string"
+      ? searchParams.layout_style
+      : undefined) ??
+    widget.layout_style ??
+    "card";
 
   return (
     <WidgetClient
@@ -37,6 +50,8 @@ export default async function WidgetPage(props: PageProps) {
       theme={widget.theme}
       fontSize={widget.font_size}
       backgroundColor={widget.background_color}
+      autoHideSeconds={autoHideSeconds}
+      layoutStyle={layoutStyle}
       mock={mock}
     />
   );

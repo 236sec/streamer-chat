@@ -10,12 +10,24 @@ import { useToast } from "@/components/ui/toast";
 import { ObsSetupGuideModal } from "@/components/obs/ObsSetupGuideModal";
 import { useOrigin } from "@/lib/use-origin";
 import { Copy, Check, HelpCircle, Save } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface WidgetRecord {
+  id: string;
+  theme?: string;
+  font_size?: string;
+  background_color?: string;
+  auto_hide_seconds?: number;
+  layout_style?: string;
+}
 
 export default function WidgetSettingsPage() {
   const [widgetId, setWidgetId] = useState("loading...");
   const [theme, setTheme] = useState("dark");
   const [fontSize, setFontSize] = useState("16px");
   const [backgroundColor, setBackgroundColor] = useState("transparent");
+  const [autoHideSeconds, setAutoHideSeconds] = useState<number>(0);
+  const [layoutStyle, setLayoutStyle] = useState<string>("card");
   const [width, setWidth] = useState("400");
   const [height, setHeight] = useState("600");
   const origin = useOrigin();
@@ -24,7 +36,6 @@ export default function WidgetSettingsPage() {
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   const { success, error: toastError } = useToast();
-
 
   useEffect(() => {
     const fetchWidget = async () => {
@@ -36,7 +47,7 @@ export default function WidgetSettingsPage() {
 
       const { data, error } = await supabase
         .from("widgets")
-        .select("id, theme, font_size, background_color")
+        .select("*")
         .eq("user_id", user.id)
         .single();
 
@@ -45,20 +56,50 @@ export default function WidgetSettingsPage() {
         if (data.theme) setTheme(data.theme);
         if (data.font_size) setFontSize(data.font_size);
         if (data.background_color) setBackgroundColor(data.background_color);
+        if (data.auto_hide_seconds !== undefined && data.auto_hide_seconds !== null) {
+          setAutoHideSeconds(Number(data.auto_hide_seconds));
+        }
+        if (data.layout_style) {
+          setLayoutStyle(data.layout_style);
+        }
       } else if (error && error.code === "PGRST116") {
         // Record not found, create new widget
+        let newWidgetData: WidgetRecord | null = null;
         const { data: newWidget, error: insertError } = await supabase
           .from("widgets")
-          .insert({ user_id: user.id })
-          .select("id, theme, font_size, background_color")
+          .insert({
+            user_id: user.id,
+            auto_hide_seconds: 0,
+            layout_style: "card",
+          })
+          .select("*")
           .single();
+
         if (newWidget) {
-          setWidgetId(newWidget.id);
-          if (newWidget.theme) setTheme(newWidget.theme);
-          if (newWidget.font_size) setFontSize(newWidget.font_size);
-          if (newWidget.background_color) setBackgroundColor(newWidget.background_color);
+          newWidgetData = newWidget;
         } else if (insertError) {
-          toastError(insertError.message || "Failed to initialize widget.", "Widget Setup Failed");
+          const fallback = await supabase
+            .from("widgets")
+            .insert({ user_id: user.id })
+            .select("*")
+            .single();
+          newWidgetData = fallback.data;
+          if (fallback.error) {
+            toastError(fallback.error.message || "Failed to initialize widget.", "Widget Setup Failed");
+          }
+        }
+
+        if (newWidgetData) {
+          setWidgetId(newWidgetData.id);
+          if (newWidgetData.theme) setTheme(newWidgetData.theme);
+          if (newWidgetData.font_size) setFontSize(newWidgetData.font_size);
+          if (newWidgetData.background_color) setBackgroundColor(newWidgetData.background_color);
+          if (newWidgetData.auto_hide_seconds !== undefined && newWidgetData.auto_hide_seconds !== null) {
+            setAutoHideSeconds(Number(newWidgetData.auto_hide_seconds));
+          }
+          if (newWidgetData.layout_style) {
+            setLayoutStyle(newWidgetData.layout_style);
+          }
         }
       } else if (error) {
         toastError(error.message || "Failed to load widget settings.", "Loading Failed");
@@ -67,25 +108,58 @@ export default function WidgetSettingsPage() {
     fetchWidget();
   }, [toastError]);
 
+  const queryParams = new URLSearchParams();
+  if (autoHideSeconds > 0) {
+    queryParams.set("auto_hide_seconds", String(autoHideSeconds));
+  }
+  if (layoutStyle && layoutStyle !== "card") {
+    queryParams.set("layout_style", layoutStyle);
+  }
+  const queryString = queryParams.toString();
   const widgetUrl =
-    origin && widgetId !== "loading..." ? `${origin}/widget/${widgetId}` : "";
+    origin && widgetId !== "loading..."
+      ? `${origin}/widget/${widgetId}${queryString ? `?${queryString}` : ""}`
+      : "";
 
   const handleSave = async () => {
     if (!widgetId || widgetId === "loading...") return;
     setIsSaving(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase
+      const updatePayload: Record<string, unknown> = {
+        theme,
+        font_size: fontSize,
+        background_color: backgroundColor,
+        auto_hide_seconds: autoHideSeconds,
+        layout_style: layoutStyle,
+      };
+
+      let { error } = await supabase
         .from("widgets")
-        .update({
-          theme,
-          font_size: fontSize,
-          background_color: backgroundColor,
-        })
+        .update(updatePayload)
         .eq("id", widgetId);
+
+      let usedFallback = false;
+      if (error && (error.message.includes("auto_hide_seconds") || error.message.includes("layout_style"))) {
+        const fallbackRes = await supabase
+          .from("widgets")
+          .update({
+            theme,
+            font_size: fontSize,
+            background_color: backgroundColor,
+          })
+          .eq("id", widgetId);
+        error = fallbackRes.error;
+        usedFallback = true;
+      }
 
       if (error) {
         toastError(error.message || "Failed to save widget settings.", "Save Failed");
+      } else if (usedFallback) {
+        success(
+          "Saved! Settings are encoded in your Widget URL. Run migration in Supabase SQL editor to store in DB.",
+          "Settings Saved"
+        );
       } else {
         success("Widget appearance saved successfully.", "Changes Saved");
       }
@@ -135,7 +209,7 @@ export default function WidgetSettingsPage() {
           <div>
             <h2 className="text-xl font-semibold mb-2">Appearance</h2>
             <p className="text-muted-foreground text-sm mb-4">
-              Customize font size, theme, and background transparency.
+              Customize font size, theme, layout style, and auto-hide timing.
             </p>
           </div>
 
@@ -151,6 +225,51 @@ export default function WidgetSettingsPage() {
                 <option value="dark">Dark</option>
                 <option value="light">Light</option>
               </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="layoutStyle">Layout Preset</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: "card", label: "Card" },
+                  { id: "bubble", label: "Bubble" },
+                  { id: "clean", label: "Clean" },
+                ].map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => setLayoutStyle(preset.id)}
+                    className={cn(
+                      "px-3 py-2 text-sm font-medium rounded-md border transition-colors",
+                      layoutStyle === preset.id
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-background hover:bg-secondary text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="autoHide">Auto-Hide Duration</Label>
+              <select
+                id="autoHide"
+                value={autoHideSeconds}
+                onChange={(e) => setAutoHideSeconds(Number(e.target.value))}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value={0}>Disabled (Permanent)</option>
+                <option value={5}>5 seconds</option>
+                <option value={10}>10 seconds</option>
+                <option value={15}>15 seconds</option>
+                <option value={30}>30 seconds</option>
+                <option value={60}>60 seconds</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Messages smoothly fade out after this duration.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -273,6 +392,8 @@ export default function WidgetSettingsPage() {
                 theme={theme}
                 fontSize={fontSize}
                 backgroundColor={backgroundColor}
+                autoHideSeconds={autoHideSeconds}
+                layoutStyle={layoutStyle}
                 mock={true}
               />
             </div>
