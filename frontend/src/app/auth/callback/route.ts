@@ -4,6 +4,18 @@ import { createServerClient } from "@supabase/ssr";
 import { env } from "@/env";
 import crypto from "crypto";
 
+function encryptToken(token: string, rawKey: string): string {
+  const key = Buffer.from(rawKey.padEnd(32, "0").slice(0, 32), "utf8");
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+
+  let encrypted = cipher.update(token, "utf8", "base64");
+  encrypted += cipher.final("base64");
+  const authTag = cipher.getAuthTag().toString("base64");
+
+  return `${iv.toString("base64")}:${authTag}:${encrypted}`;
+}
+
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
@@ -47,29 +59,31 @@ export async function GET(request: Request) {
         }
         
         if (platform) {
-          // Encrypt the token with AES-GCM
           const rawKey = process.env.MASTER_DECRYPTION_KEY || "0123456789abcdef0123456789abcdef";
-          const key = Buffer.from(rawKey.padEnd(32, '0').slice(0, 32), 'utf8');
-          const iv = crypto.randomBytes(12);
-          const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
-          
-          let encrypted = cipher.update(session.provider_token, "utf8", "base64");
-          encrypted += cipher.final("base64");
-          const authTag = cipher.getAuthTag().toString("base64");
-          
-          const encryptedToken = `${iv.toString("base64")}:${authTag}:${encrypted}`;
+          const encryptedToken = encryptToken(session.provider_token, rawKey);
+          const encryptedRefreshToken = session.provider_refresh_token
+            ? encryptToken(session.provider_refresh_token, rawKey)
+            : undefined;
+
+          const tokenData: {
+            user_id: string;
+            platform: string;
+            encrypted_token: string;
+            encrypted_refresh_token?: string;
+          } = {
+            user_id: user.id,
+            platform,
+            encrypted_token: encryptedToken,
+          };
+
+          if (encryptedRefreshToken) {
+            tokenData.encrypted_refresh_token = encryptedRefreshToken;
+          }
 
           // Save to platform_tokens table
           const { error } = await supabase
             .from("platform_tokens")
-            .upsert(
-              { 
-                user_id: user.id, 
-                platform, 
-                encrypted_token: encryptedToken 
-              },
-              { onConflict: "user_id,platform" }
-            );
+            .upsert(tokenData, { onConflict: "user_id,platform" });
 
           if (error) {
             console.error("Failed to save platform token:", error);

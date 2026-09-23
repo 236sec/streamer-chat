@@ -5,6 +5,7 @@ use uuid::Uuid;
 pub struct PlatformTokens {
     pub twitch: Option<String>,
     pub youtube: Option<String>,
+    pub youtube_refresh: Option<String>,
     pub kick: Option<String>,
 }
 
@@ -15,7 +16,7 @@ pub async fn fetch_tokens(pool: &PgPool, widget_id: &Uuid) -> Result<PlatformTok
     // To avoid needing offline mode setup or real DB during compilation, we use query without macro.
 
     let rows = sqlx::query(
-        "SELECT platform, encrypted_token FROM platform_tokens WHERE user_id = (SELECT user_id FROM widgets WHERE id = $1)"
+        "SELECT platform, encrypted_token, encrypted_refresh_token FROM platform_tokens WHERE user_id = (SELECT user_id FROM widgets WHERE id = $1)"
     )
     .bind(widget_id)
     .fetch_all(pool)
@@ -25,15 +26,20 @@ pub async fn fetch_tokens(pool: &PgPool, widget_id: &Uuid) -> Result<PlatformTok
     let mut tokens = PlatformTokens {
         twitch: None,
         youtube: None,
+        youtube_refresh: None,
         kick: None,
     };
 
     for row in rows {
         let platform: String = row.try_get("platform")?;
         let token: String = row.try_get("encrypted_token")?;
+        let refresh_token: Option<String> = row.try_get("encrypted_refresh_token").unwrap_or(None);
         match platform.as_str() {
             "twitch" => tokens.twitch = Some(token),
-            "youtube" => tokens.youtube = Some(token),
+            "youtube" => {
+                tokens.youtube = Some(token);
+                tokens.youtube_refresh = refresh_token;
+            }
             "kick" => tokens.kick = Some(token),
             _ => {}
         }

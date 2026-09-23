@@ -29,10 +29,7 @@ async fn resolve_twitch_user_id(
         .unwrap_or_else(|_| "<unreadable>".to_string());
 
     if !status.is_success() {
-        return Err(format!(
-            "Helix /users returned {}: {}",
-            status, body
-        ));
+        return Err(format!("Helix /users returned {}: {}", status, body));
     }
 
     let json: Value = serde_json::from_str(&body)
@@ -55,7 +52,9 @@ pub async fn spawn_twitch_client(widget_id: String, token: String, tx: broadcast
     let client_id = match std::env::var("TWITCH_CLIENT_ID") {
         Ok(id) => id,
         Err(_) => {
-            eprintln!("[Twitch] TWITCH_CLIENT_ID env var is not set — Twitch integration will not work");
+            eprintln!(
+                "[Twitch] TWITCH_CLIENT_ID env var is not set — Twitch integration will not work"
+            );
             return;
         }
     };
@@ -156,7 +155,10 @@ pub async fn spawn_twitch_client(widget_id: String, token: String, tx: broadcast
                                     {
                                         if let Ok(json) = serde_json::to_string(&chat_msg) {
                                             if let Err(e) = tx.send(json) {
-                                                eprintln!("[Twitch] Failed to broadcast message: {}", e);
+                                                eprintln!(
+                                                    "[Twitch] Failed to broadcast message: {}",
+                                                    e
+                                                );
                                                 break; // Receiver channel broken or empty
                                             }
                                         }

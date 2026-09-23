@@ -57,15 +57,11 @@ async fn handle_socket(
         connection_type
     );
 
-    let mut rx = match &widget_id {
-        Some(id) => state.get_or_create_channel(id, mock).await.subscribe(),
-        None => state.tx.subscribe(),
-    };
-
     let tx = match &widget_id {
         Some(id) => state.get_or_create_channel(id, mock).await,
         None => state.tx.clone(),
     };
+    let mut rx = tx.subscribe();
 
     let (mut sender, mut receiver) = socket.split();
 
@@ -136,10 +132,12 @@ async fn handle_socket(
         _ = (&mut send_task) => {
             println!("[WebSocket Backend] Send task ended for {}", connection_type);
             recv_task.abort();
+            let _ = recv_task.await;
         },
         _ = (&mut recv_task) => {
             println!("[WebSocket Backend] Receive task ended for {}", connection_type);
             send_task.abort();
+            let _ = send_task.await;
         },
     }
 
@@ -151,6 +149,8 @@ async fn handle_socket(
             if channel.receiver_count() == 0 {
                 println!("[WebSocket Backend] Cleaning up channel for Widget({})", id);
                 channels.remove(&id);
+                let mut workers = state.widget_workers.write().await;
+                workers.remove(&id);
             }
         }
     }
