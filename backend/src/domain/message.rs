@@ -41,3 +41,24 @@ impl ChatMessage {
         }
     }
 }
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct PlatformError {
+    pub r#type: String,     // always "platform_error"
+    pub platform: String,   // "twitch", "youtube", "kick"
+    pub error_code: String, // "token_expired", "auth_failed", "refresh_failed"
+    pub message: String,    // human-readable description
+    pub widget_id: Option<String>,
+}
+
+impl PlatformError {
+    pub fn token_expired(platform: &str, widget_id: &str, detail: &str) -> Self {
+        Self {
+            r#type: "platform_error".to_string(),
+            platform: platform.to_string(),
+            error_code: "token_expired".to_string(),
+            message: detail.to_string(),
+            widget_id: Some(widget_id.to_string()),
+        }
+    }
+}

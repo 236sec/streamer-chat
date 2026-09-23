@@ -120,11 +120,11 @@ Every ticket uses this structure:
 
 **Blocked by:** 04: Real Twitch/YouTube/Kick Integration
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Connect to Kick's chat service.
-- [ ] Parse incoming Kick message payloads into the `ChatMessage` schema.
-- [ ] Stream parsed messages to the live widget connection.
+- [x] Connect to Kick's chat service.
+- [x] Parse incoming Kick message payloads into the `ChatMessage` schema.
+- [x] Stream parsed messages to the live widget connection.
 
 ---
 

@@ -1,5 +1,7 @@
+use crate::infrastructure::util::sleep_or_cancel;
 use std::time::Duration;
 use tokio::sync::broadcast;
+use tokio_util::sync::CancellationToken;
 
 fn url_encode(input: &str) -> String {
     let mut encoded = String::new();
@@ -69,33 +71,12 @@ async fn refresh_access_token(
         .ok_or_else(|| "No access_token found in refresh response".to_string())
 }
 
-async fn sleep_or_cancel(duration: Duration, tx: &broadcast::Sender<String>) -> bool {
-    let mut elapsed = Duration::ZERO;
-    let step = Duration::from_millis(100);
-    let mut zero_receivers_count = 0;
-    while elapsed < duration {
-        if tx.receiver_count() == 0 {
-            zero_receivers_count += 1;
-            // Allow up to 10 consecutive ticks (1 second) of 0 receivers
-            // so brief reconnection / page reload does not immediately terminate workers
-            if zero_receivers_count >= 10 {
-                return false;
-            }
-        } else {
-            zero_receivers_count = 0;
-        }
-        let current_step = step.min(duration - elapsed);
-        tokio::time::sleep(current_step).await;
-        elapsed += current_step;
-    }
-    tx.receiver_count() > 0 || zero_receivers_count < 10
-}
-
 pub async fn spawn_youtube_client(
     widget_id: String,
     token: String,
     refresh_token: Option<String>,
     tx: broadcast::Sender<String>,
+    cancel: CancellationToken,
 ) {
     let base_url = std::env::var("YOUTUBE_API_BASE_URL")
         .unwrap_or_else(|_| "https://www.googleapis.com/youtube/v3".to_string());
@@ -111,7 +92,7 @@ pub async fn spawn_youtube_client(
     println!("[YouTube] Starting YouTube client for widget {}", widget_id);
 
     'outer: loop {
-        if tx.receiver_count() == 0 {
+        if tx.receiver_count() == 0 || cancel.is_cancelled() {
             break 'outer;
         }
 
@@ -122,7 +103,7 @@ pub async fn spawn_youtube_client(
         );
 
         let (broadcast_id, mut live_chat_id) = loop {
-            if tx.receiver_count() == 0 {
+            if tx.receiver_count() == 0 || cancel.is_cancelled() {
                 break 'outer;
             }
 
@@ -146,11 +127,23 @@ pub async fn spawn_youtube_client(
                                 }
                                 Err(e) => {
                                     eprintln!("[YouTube] Failed to refresh token: {}", e);
+                                    let error = crate::domain::message::PlatformError::token_expired(
+                                        "youtube", &widget_id, &format!("YouTube token refresh failed. Please reconnect your YouTube account. ({})", e),
+                                    );
+                                    if let Ok(json) = serde_json::to_string(&error) {
+                                        let _ = tx.send(json);
+                                    }
                                     break 'outer;
                                 }
                             }
                         } else {
                             eprintln!("[YouTube] 401 Unauthorized and no refresh token available");
+                            let error = crate::domain::message::PlatformError::token_expired(
+                                "youtube", &widget_id, "YouTube access token expired and no refresh token is available. Please reconnect your YouTube account.",
+                            );
+                            if let Ok(json) = serde_json::to_string(&error) {
+                                let _ = tx.send(json);
+                            }
                             break 'outer;
                         }
                     } else if status.is_success() {
@@ -228,7 +221,7 @@ pub async fn spawn_youtube_client(
                 }
             }
 
-            if !sleep_or_cancel(discovery_interval, &tx).await {
+            if !sleep_or_cancel(discovery_interval, &tx, &cancel).await {
                 break 'outer;
             }
         };
@@ -237,7 +230,7 @@ pub async fn spawn_youtube_client(
         let mut page_token: Option<String> = None;
         let mut not_found_retries = 0;
         loop {
-            if tx.receiver_count() == 0 {
+            if tx.receiver_count() == 0 || cancel.is_cancelled() {
                 break 'outer;
             }
 
@@ -271,11 +264,23 @@ pub async fn spawn_youtube_client(
                                 }
                                 Err(e) => {
                                     eprintln!("[YouTube] Failed to refresh token: {}", e);
+                                    let error = crate::domain::message::PlatformError::token_expired(
+                                        "youtube", &widget_id, &format!("YouTube token refresh failed. Please reconnect your YouTube account. ({})", e),
+                                    );
+                                    if let Ok(json) = serde_json::to_string(&error) {
+                                        let _ = tx.send(json);
+                                    }
                                     break 'outer;
                                 }
                             }
                         } else {
                             eprintln!("[YouTube] 401 Unauthorized during chat poll and no refresh token available");
+                            let error = crate::domain::message::PlatformError::token_expired(
+                                "youtube", &widget_id, "YouTube access token expired and no refresh token is available. Please reconnect your YouTube account.",
+                            );
+                            if let Ok(json) = serde_json::to_string(&error) {
+                                let _ = tx.send(json);
+                            }
                             break 'outer;
                         }
                     } else if status == reqwest::StatusCode::NOT_FOUND {
@@ -326,7 +331,7 @@ pub async fn spawn_youtube_client(
                                 "[YouTube] Live chat initializing or transient 404, retrying in 2s (attempt {}/5)...",
                                 not_found_retries
                             );
-                            if !sleep_or_cancel(Duration::from_secs(2), &tx).await {
+                            if !sleep_or_cancel(Duration::from_secs(2), &tx, &cancel).await {
                                 break 'outer;
                             }
                             continue;
@@ -390,12 +395,12 @@ pub async fn spawn_youtube_client(
                 }
             }
 
-            if !sleep_or_cancel(Duration::from_millis(next_poll_millis), &tx).await {
+            if !sleep_or_cancel(Duration::from_millis(next_poll_millis), &tx, &cancel).await {
                 break 'outer;
             }
         }
 
-        if !sleep_or_cancel(discovery_interval, &tx).await {
+        if !sleep_or_cancel(discovery_interval, &tx, &cancel).await {
             break 'outer;
         }
     }
