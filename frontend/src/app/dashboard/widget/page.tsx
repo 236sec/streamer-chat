@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { PinDashboard } from "@/components/widget/PinDashboard";
 import { WidgetClient } from "@/components/widget/WidgetClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -400,6 +401,8 @@ export default function WidgetSettingsPage() {
           </div>
         </div>
       </div>
+
+      {widgetId !== "loading..." && <PinDashboard widgetId={widgetId} />}
 
       <ObsSetupGuideModal
         isOpen={isGuideOpen}

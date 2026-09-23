@@ -86,3 +86,39 @@ pub fn decrypt_token(encrypted: &str, key_hex: &str) -> String {
         Err(_) => encrypted.to_string(), // fallback
     }
 }
+
+pub async fn load_pin(
+    pool: &PgPool,
+    widget_id: &Uuid,
+) -> Result<Option<(i64, Option<crate::domain::message::ChatMessage>)>, sqlx::Error> {
+    use sqlx::Row;
+    let row = sqlx::query("SELECT pin_revision, pinned_message FROM widgets WHERE id = $1")
+        .bind(widget_id)
+        .fetch_optional(pool)
+        .await?;
+    row.map(|r| {
+        let revision: i64 = r.try_get("pin_revision")?;
+        let value: Option<serde_json::Value> = r.try_get("pinned_message")?;
+        let message = value
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+        Ok((revision, message))
+    })
+    .transpose()
+}
+
+pub async fn save_pin(
+    pool: &PgPool,
+    widget_id: &Uuid,
+    message: Option<&crate::domain::message::ChatMessage>,
+) -> Result<Option<i64>, sqlx::Error> {
+    use sqlx::Row;
+    let value = message
+        .map(serde_json::to_value)
+        .transpose()
+        .map_err(|e| sqlx::Error::Encode(Box::new(e)))?;
+    let row = sqlx::query("UPDATE widgets SET pinned_message = $2, pin_revision = pin_revision + 1 WHERE id = $1 RETURNING pin_revision")
+        .bind(widget_id).bind(value).fetch_optional(pool).await?;
+    row.map(|r| r.try_get("pin_revision")).transpose()
+}

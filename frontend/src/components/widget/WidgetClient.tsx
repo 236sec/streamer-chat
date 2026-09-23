@@ -204,6 +204,8 @@ export function WidgetClient({
             return;
           }
 
+          if (data.type !== "chat_message") return;
+
           setMessages((prev) => {
             const newMessages: DisplayMessage[] = [
               ...prev,

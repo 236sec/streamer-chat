@@ -168,13 +168,13 @@ Every ticket uses this structure:
 
 **Blocked by:** 09: Chat Overlay Enhancements
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Dedicated public route `/widget/[id]/highlight` in Next.js
-- [ ] WebSocket event handling for `pin_message` and `unpin_message` broadcasts
-- [ ] Highlight overlay component with animated entry/exit and high-contrast card styling
-- [ ] Interactive live chat feed in dashboard allowing streamer to pin and unpin messages
-- [ ] Highlight widget URL copy button and OBS dimensions guide in dashboard
+- [x] Dedicated public route `/widget/[id]/highlight` in Next.js
+- [x] WebSocket event handling for `pin_message` and `unpin_message` broadcasts
+- [x] Highlight overlay component with animated entry/exit and high-contrast card styling
+- [x] Interactive live chat feed in dashboard allowing streamer to pin and unpin messages
+- [x] Highlight widget URL copy button and OBS dimensions guide in dashboard
 
 ---
 

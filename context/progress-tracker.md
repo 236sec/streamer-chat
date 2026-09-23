@@ -4,7 +4,7 @@
 - None.
 
 ## Frontier Tickets
-- 10: Message Highlight Overlay & Dashboard Pin Control
+- None.
 
 ## In Progress
 - None.
@@ -23,6 +23,10 @@
 - 08-fix: Kick Pusher reconnect loop fix (CancellationToken & sleep_or_cancel) + token expiry error propagation (WebSocket platform_error, widget alert banner & accounts page token status)
 - 08: Frontend UX and Error Handling (Toast notifications, Supabase widget persistence, dynamic origin URL & copy feedback, 3-step onboarding checklist, OBS setup guide modal, Kick validation, OAuth error banner, token tooltips, disconnect confirm)
 - 09: Chat Overlay Enhancements (Auto-hide duration timer with smooth fade-out CSS transitions, Card/Bubble/Clean layout presets, dashboard settings controls, and live preview synchronization)
+- 10: Message Highlight Overlay & Dashboard Pin Control (authenticated dashboard pin controls, persisted pin state, widget-scoped broadcasts, reconnect snapshot, and separate OBS highlight source)
+
+## Verification Limits
+- Ticket 10 database integration test is explicitly ignored until a disposable `TEST_DATABASE_URL` is available. Docker's daemon and local PostgreSQL binaries were unavailable in this environment. From `backend/`, run `cargo test pin_broadcasts_to_one_widget_and_reconnects_from_database -- --ignored` with `TEST_DATABASE_URL` set. The required lint, build, format, Clippy, and Rust test commands pass.
 
 ## Blocked
 - None.

@@ -2,7 +2,7 @@ use crate::domain::message::ChatMessage;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{broadcast, Mutex, RwLock};
 use tokio_util::sync::CancellationToken;
 
 pub type WorkerEntry = (Arc<std::sync::atomic::AtomicBool>, CancellationToken);
@@ -12,6 +12,8 @@ pub struct AppState {
     pub widget_channels: Arc<RwLock<HashMap<String, broadcast::Sender<String>>>>,
     pub widget_workers: Arc<RwLock<HashMap<String, WorkerEntry>>>,
     pub pool: Option<PgPool>,
+    pub pin_locks: Arc<RwLock<HashMap<String, Arc<Mutex<()>>>>>,
+    pub pin_command_secret: String,
     pub master_key: String,
 }
 
@@ -25,12 +27,22 @@ impl Default for AppState {
             widget_channels: Arc::new(RwLock::new(HashMap::new())),
             widget_workers: Arc::new(RwLock::new(HashMap::new())),
             pool: None,
+            pin_locks: Arc::new(RwLock::new(HashMap::new())),
+            pin_command_secret: std::env::var("PIN_COMMAND_SECRET").unwrap_or_default(),
             master_key,
         }
     }
 }
 
 impl AppState {
+    pub async fn pin_lock(&self, widget_id: &str) -> Arc<Mutex<()>> {
+        let mut locks = self.pin_locks.write().await;
+        locks
+            .entry(widget_id.to_string())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
+    }
+
     pub fn new(pool: PgPool) -> Self {
         let (tx, _) = broadcast::channel(100);
         let master_key = std::env::var("MASTER_DECRYPTION_KEY")
@@ -40,6 +52,8 @@ impl AppState {
             widget_channels: Arc::new(RwLock::new(HashMap::new())),
             widget_workers: Arc::new(RwLock::new(HashMap::new())),
             pool: Some(pool),
+            pin_locks: Arc::new(RwLock::new(HashMap::new())),
+            pin_command_secret: std::env::var("PIN_COMMAND_SECRET").unwrap_or_default(),
             master_key,
         }
     }

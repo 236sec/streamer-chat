@@ -1,16 +1,19 @@
 use axum::{
+    extract::DefaultBodyLimit,
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
-        Path, Query, State,
+        Json, Path, Query, State,
     },
+    http::{HeaderMap, StatusCode},
     response::IntoResponse,
-    routing::get,
+    routing::{get, post},
     Router,
 };
 use futures::{sink::SinkExt, stream::StreamExt};
 use serde::Deserialize;
 use std::sync::Arc;
 
+use crate::application::pin::{validate_command, PinCommand, PinEvent};
 use crate::application::state::AppState;
 
 #[derive(Deserialize)]
@@ -22,6 +25,10 @@ pub fn create_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/ws", get(ws_handler_global))
         .route("/ws/widget/:id", get(ws_handler_widget))
+        .route(
+            "/internal/widgets/:id/pin",
+            post(pin_handler).layer(DefaultBodyLimit::max(16 * 1024)),
+        )
         .with_state(state)
 }
 
@@ -41,8 +48,51 @@ async fn ws_handler_widget(
     ws.on_upgrade(move |socket| handle_socket(socket, state, Some(id), query.mock.unwrap_or(false)))
 }
 
+async fn pin_handler(
+    Path(id): Path<String>,
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(command): Json<PinCommand>,
+) -> Result<Json<PinEvent>, StatusCode> {
+    let supplied = headers.get("x-pin-secret").and_then(|v| v.to_str().ok());
+    if state.pin_command_secret.is_empty() || supplied != Some(state.pin_command_secret.as_str()) {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    let widget_id = uuid::Uuid::parse_str(&id).map_err(|_| StatusCode::BAD_REQUEST)?;
+    if !validate_command(&command, &id) {
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    let pool = state.pool.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let lock = state.pin_lock(&id).await;
+    let _guard = lock.lock().await;
+    let message = match command {
+        PinCommand::Pin { message } => Some(*message),
+        PinCommand::Unpin => None,
+    };
+    let revision = crate::infrastructure::db::save_pin(pool, &widget_id, message.as_ref())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)?;
+    let event = PinEvent {
+        r#type: if message.is_some() {
+            "pin_message"
+        } else {
+            "unpin_message"
+        }
+        .to_string(),
+        revision,
+        message,
+    };
+    if let Some(channel) = state.widget_channels.read().await.get(&id) {
+        if let Ok(json) = serde_json::to_string(&event) {
+            let _ = channel.send(json);
+        }
+    }
+    Ok(Json(event))
+}
+
 async fn handle_socket(
-    socket: WebSocket,
+    mut socket: WebSocket,
     state: Arc<AppState>,
     widget_id: Option<String>,
     mock: bool,
@@ -63,7 +113,44 @@ async fn handle_socket(
     };
     let mut rx = tx.subscribe();
 
+    let snapshot = if let (Some(id), Some(pool)) = (&widget_id, &state.pool) {
+        if let Ok(uuid) = uuid::Uuid::parse_str(id) {
+            let lock = state.pin_lock(id).await;
+            let _guard = lock.lock().await;
+            match crate::infrastructure::db::load_pin(pool, &uuid).await {
+                Ok(Some(pin)) => Some(pin),
+                Ok(None) => {
+                    let _ = socket.send(Message::Close(None)).await;
+                    return;
+                }
+                Err(error) => {
+                    eprintln!(
+                        "[WebSocket Backend] Failed to load pin state for Widget({id}): {error}"
+                    );
+                    let _ = socket.send(Message::Close(None)).await;
+                    return;
+                }
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     let (mut sender, mut receiver) = socket.split();
+    if let Some((revision, message)) = snapshot {
+        let event = PinEvent {
+            r#type: "pin_state".to_string(),
+            revision,
+            message,
+        };
+        if let Ok(json) = serde_json::to_string(&event) {
+            if sender.send(Message::Text(json)).await.is_err() {
+                return;
+            }
+        }
+    }
 
     let conn_type_for_send = connection_type.clone();
     let mut send_task = tokio::spawn(async move {
