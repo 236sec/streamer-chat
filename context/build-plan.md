@@ -120,11 +120,29 @@ Every ticket uses this structure:
 
 **Blocked by:** 04: Real Twitch/YouTube/Kick Integration
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Connect to Kick's chat service.
-- [ ] Parse incoming Kick message payloads into the `ChatMessage` schema.
-- [ ] Stream parsed messages to the live widget connection.
+- [x] Connect to Kick's chat service.
+- [x] Parse incoming Kick message payloads into the `ChatMessage` schema.
+- [x] Stream parsed messages to the live widget connection.
+
+---
+
+## 08: Frontend UX and Error Handling
+
+**What to build:** Polish frontend UX/UI with persistent widget configuration, clipboard feedback, interactive onboarding checklist, OBS integration guide, toast notifications, and robust account error handling.
+
+**Blocked by:** 07: Rust Backend Kick Chat Ingestion
+
+**Status:** done
+
+- [x] Toast notification system for transient alerts and copy feedback
+- [x] Persistent widget settings stored to Supabase with save status
+- [x] Dynamic origin widget URL and copy confirmation state
+- [x] Onboarding setup checklist on Dashboard home page
+- [x] OBS setup instructions guide modal/card
+- [x] Connected accounts error banners, Kick validation, and token health explanations
+- [x] Disconnection confirmation dialog
 
 ---
 

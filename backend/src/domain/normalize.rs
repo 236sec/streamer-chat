@@ -5,10 +5,40 @@ pub fn normalize_message(platform: &str, widget_id: &str, payload: &Value) -> Op
     match platform {
         "twitch" => {
             // Updated to parse Twitch EventSub payload
-            let event = payload.get("event")?;
-            let author = event.get("chatter_user_name")?.as_str()?;
-            let message_obj = event.get("message")?;
-            let content = message_obj.get("text")?.as_str()?;
+            let event = match payload.get("event") {
+                Some(e) => e,
+                None => {
+                    eprintln!("[normalize] Twitch payload missing 'event': {:?}", payload);
+                    return None;
+                }
+            };
+            let author = match event.get("chatter_user_name").and_then(|v| v.as_str()) {
+                Some(a) => a,
+                None => {
+                    eprintln!(
+                        "[normalize] Twitch event missing 'chatter_user_name': {:?}",
+                        event
+                    );
+                    return None;
+                }
+            };
+            let message_obj = match event.get("message") {
+                Some(m) => m,
+                None => {
+                    eprintln!("[normalize] Twitch event missing 'message': {:?}", event);
+                    return None;
+                }
+            };
+            let content = match message_obj.get("text").and_then(|v| v.as_str()) {
+                Some(c) => c,
+                None => {
+                    eprintln!(
+                        "[normalize] Twitch message missing 'text': {:?}",
+                        message_obj
+                    );
+                    return None;
+                }
+            };
             let color = event
                 .get("color")
                 .and_then(|v| v.as_str())
@@ -53,10 +83,37 @@ pub fn normalize_message(platform: &str, widget_id: &str, payload: &Value) -> Op
             })
         }
         "youtube" => {
-            let snippet = payload.get("snippet")?;
-            let author = payload.get("authorDetails")?;
-            let author_name = author.get("displayName")?.as_str()?;
-            let message = snippet
+            let snippet = match payload.get("snippet") {
+                Some(s) => s,
+                None => {
+                    eprintln!(
+                        "[normalize] YouTube payload missing 'snippet': {:?}",
+                        payload
+                    );
+                    return None;
+                }
+            };
+            let author = match payload.get("authorDetails") {
+                Some(a) => a,
+                None => {
+                    eprintln!(
+                        "[normalize] YouTube payload missing 'authorDetails': {:?}",
+                        payload
+                    );
+                    return None;
+                }
+            };
+            let author_name = match author.get("displayName").and_then(|v| v.as_str()) {
+                Some(n) => n,
+                None => {
+                    eprintln!(
+                        "[normalize] YouTube authorDetails missing 'displayName': {:?}",
+                        author
+                    );
+                    return None;
+                }
+            };
+            let message = match snippet
                 .get("displayMessage")
                 .and_then(|v| v.as_str())
                 .or_else(|| {
@@ -64,7 +121,16 @@ pub fn normalize_message(platform: &str, widget_id: &str, payload: &Value) -> Op
                         .get("textMessageDetails")
                         .and_then(|t| t.get("messageText"))
                         .and_then(|v| v.as_str())
-                })?;
+                }) {
+                Some(m) => m,
+                None => {
+                    eprintln!(
+                        "[normalize] YouTube snippet missing message text: {:?}",
+                        snippet
+                    );
+                    return None;
+                }
+            };
             Some(ChatMessage {
                 id: uuid::Uuid::new_v4().to_string(),
                 r#type: "chat_message".to_string(),
@@ -84,9 +150,50 @@ pub fn normalize_message(platform: &str, widget_id: &str, payload: &Value) -> Op
             })
         }
         "kick" => {
-            let sender = payload.get("sender")?;
-            let author_name = sender.get("username")?.as_str()?;
-            let message = payload.get("content")?.as_str()?;
+            // Kick sends pusher events where the actual message is JSON-stringified inside `data`
+            // Example: {"event": "App\\Events\\ChatMessageEvent", "data": "{\"content\":\"hello\",...}"}
+            let data_str = match payload.get("data").and_then(|v| v.as_str()) {
+                Some(s) => s,
+                None => {
+                    eprintln!(
+                        "[normalize] Kick payload missing 'data' string: {:?}",
+                        payload
+                    );
+                    return None;
+                }
+            };
+            let data: Value = match serde_json::from_str(data_str) {
+                Ok(v) => v,
+                Err(e) => {
+                    eprintln!(
+                        "[normalize] Kick failed to parse data JSON: {}. Data: {}",
+                        e, data_str
+                    );
+                    return None;
+                }
+            };
+
+            let sender = match data.get("sender") {
+                Some(s) => s,
+                None => {
+                    eprintln!("[normalize] Kick data missing 'sender': {:?}", data);
+                    return None;
+                }
+            };
+            let author_name = match sender.get("username").and_then(|v| v.as_str()) {
+                Some(u) => u,
+                None => {
+                    eprintln!("[normalize] Kick sender missing 'username': {:?}", sender);
+                    return None;
+                }
+            };
+            let message = match data.get("content").and_then(|v| v.as_str()) {
+                Some(m) => m,
+                None => {
+                    eprintln!("[normalize] Kick data missing 'content': {:?}", data);
+                    return None;
+                }
+            };
             Some(ChatMessage {
                 id: uuid::Uuid::new_v4().to_string(),
                 r#type: "chat_message".to_string(),

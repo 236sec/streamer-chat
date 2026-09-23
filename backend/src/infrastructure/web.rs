@@ -150,7 +150,9 @@ async fn handle_socket(
                 println!("[WebSocket Backend] Cleaning up channel for Widget({})", id);
                 channels.remove(&id);
                 let mut workers = state.widget_workers.write().await;
-                workers.remove(&id);
+                if let Some((_flag, cancel_token)) = workers.remove(&id) {
+                    cancel_token.cancel();
+                }
             }
         }
     }

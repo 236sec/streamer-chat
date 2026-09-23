@@ -14,6 +14,7 @@ interface Message {
   author: string;
   content: string;
   color?: string;
+  platform?: string;
   fragments?: MessageFragment[];
 }
 
@@ -27,6 +28,7 @@ interface WidgetClientProps {
 
 export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock }: WidgetClientProps) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [platformErrors, setPlatformErrors] = useState<Map<string, string>>(new Map());
   const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
@@ -47,6 +49,7 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock 
             id: `mock-${Date.now()}-${count}`,
             type: "chat_message",
             author: count % 2 === 0 ? "StreamFan" : "CoolGamer99",
+            platform: count % 3 === 0 ? "youtube" : count % 2 === 0 ? "kick" : "twitch",
             content: `This is mock message #${count} to preview your widget styling!`,
             color: count % 2 === 0 ? "#8a2be2" : "#ff4500",
             fragments: [
@@ -76,6 +79,16 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          
+          if (data.type === "platform_error") {
+            setPlatformErrors(prev => {
+              const next = new Map(prev);
+              next.set(data.platform, data.message);
+              return next;
+            });
+            return;
+          }
+          
           setMessages((prev) => {
             const newMessages = [...prev, data];
             if (newMessages.length > 50) {
@@ -128,10 +141,31 @@ export function WidgetClient({ widgetId, theme, fontSize, backgroundColor, mock 
       className={cn("absolute inset-0 overflow-hidden flex flex-col justify-end p-4", theme === "dark" && "dark")}
       style={{ backgroundColor: backgroundColor || "transparent", fontSize: fontSize }}
     >
+      {platformErrors.size > 0 && (
+        <div className="mb-2 px-3 py-1.5 rounded bg-destructive/80 text-destructive-foreground text-xs">
+          {Array.from(platformErrors.entries()).map(([platform]) => (
+            <div key={platform} className="flex items-center gap-1">
+              <span className="font-semibold uppercase">{platform}</span>
+              <span>— Token expired. Reconnect in dashboard.</span>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="flex flex-col gap-2">
         {messages.map((msg) => (
           <div key={msg.id} className={cn("px-4 py-2 rounded shadow-sm break-words bg-card text-card-foreground")}>
-            <span style={{ color: msg.color || "inherit" }} className="font-bold mr-2">
+            {msg.platform && (
+              <span
+                className="inline-block px-1.5 py-0.5 mr-2 text-xs font-semibold uppercase rounded align-middle"
+                style={{
+                  backgroundColor: `var(--${msg.platform})`,
+                  color: msg.platform === "kick" ? "black" : "white",
+                }}
+              >
+                {msg.platform}
+              </span>
+            )}
+            <span style={{ color: msg.color || "inherit" }} className="font-bold mr-2 align-middle">
               {msg.author}:
             </span>
             <span>

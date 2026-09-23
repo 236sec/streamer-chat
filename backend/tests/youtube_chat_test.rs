@@ -84,8 +84,14 @@ async fn test_youtube_chat_ingestion_lifecycle() {
     let token = "test_yt_token".to_string();
 
     let handle = tokio::spawn(async move {
-        backend::infrastructure::youtube::spawn_youtube_client(widget_id, token, None, tx_clone)
-            .await;
+        backend::infrastructure::youtube::spawn_youtube_client(
+            widget_id,
+            token,
+            None,
+            tx_clone,
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .await;
     });
 
     // Verify chat message is received
@@ -215,6 +221,7 @@ async fn test_youtube_chat_token_refresh_on_401() {
             initial_expired_token,
             refresh_token,
             tx_clone,
+            tokio_util::sync::CancellationToken::new(),
         )
         .await;
     });
@@ -340,8 +347,14 @@ async fn test_youtube_chat_retry_on_initial_404() {
     let token = "valid_token".to_string();
 
     let handle = tokio::spawn(async move {
-        backend::infrastructure::youtube::spawn_youtube_client(widget_id, token, None, tx_clone)
-            .await;
+        backend::infrastructure::youtube::spawn_youtube_client(
+            widget_id,
+            token,
+            None,
+            tx_clone,
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .await;
     });
 
     let timeout = tokio::time::timeout(Duration::from_secs(5), rx.recv()).await;

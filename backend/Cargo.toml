@@ -16,6 +16,7 @@ base64 = "0.23.1"
 uuid = { version = "1.26.1", features = ["v4", "serde"] }
 tokio-tungstenite = { version = "0.21", features = ["rustls-tls-native-roots"] }
 reqwest = { version = "0.13.5", features = ["json", "rustls"] }
+tokio-util = { version = "0.7", features = ["rt"] }
 
 [dev-dependencies]
 tokio-tungstenite = "0.21"

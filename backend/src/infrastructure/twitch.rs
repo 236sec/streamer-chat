@@ -44,7 +44,15 @@ async fn resolve_twitch_user_id(
         .ok_or_else(|| format!("No user found in /users response: {}", body))
 }
 
-pub async fn spawn_twitch_client(widget_id: String, token: String, tx: broadcast::Sender<String>) {
+use crate::infrastructure::util::sleep_or_cancel;
+use tokio_util::sync::CancellationToken;
+
+pub async fn spawn_twitch_client(
+    widget_id: String,
+    token: String,
+    tx: broadcast::Sender<String>,
+    cancel: CancellationToken,
+) {
     let ws_url = std::env::var("TWITCH_WS_URL")
         .unwrap_or_else(|_| "wss://eventsub.wss.twitch.tv/ws".to_string());
     let http_url = std::env::var("TWITCH_HTTP_URL")
@@ -68,12 +76,26 @@ pub async fn spawn_twitch_client(widget_id: String, token: String, tx: broadcast
         }
         Err(e) => {
             eprintln!("[Twitch] Failed to resolve user ID: {}", e);
+            let err_msg = e.to_string();
+            if err_msg.contains("401") || err_msg.contains("Unauthorized") {
+                let error = crate::domain::message::PlatformError::token_expired(
+                    "twitch",
+                    &widget_id,
+                    &format!(
+                        "Twitch authentication failed. Please reconnect your Twitch account. ({})",
+                        err_msg
+                    ),
+                );
+                if let Ok(json) = serde_json::to_string(&error) {
+                    let _ = tx.send(json);
+                }
+            }
             return;
         }
     };
 
     loop {
-        if tx.receiver_count() == 0 {
+        if tx.receiver_count() == 0 || cancel.is_cancelled() {
             break;
         }
 
@@ -81,8 +103,8 @@ pub async fn spawn_twitch_client(widget_id: String, token: String, tx: broadcast
             Ok((mut ws_stream, _)) => {
                 println!("[Twitch] Connected to EventSub WebSocket");
                 while let Some(msg) = ws_stream.next().await {
-                    if tx.receiver_count() == 0 {
-                        // Widget disconnected, teardown connection
+                    if tx.receiver_count() == 0 || cancel.is_cancelled() {
+                        // Widget disconnected or worker cancelled
                         break;
                     }
 
@@ -180,9 +202,8 @@ pub async fn spawn_twitch_client(widget_id: String, token: String, tx: broadcast
             }
         }
 
-        if tx.receiver_count() == 0 {
+        if !sleep_or_cancel(std::time::Duration::from_secs(1), &tx, &cancel).await {
             break;
         }
-        tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
     }
 }

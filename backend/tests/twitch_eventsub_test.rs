@@ -68,7 +68,13 @@ async fn test_twitch_eventsub_lifecycle() {
     let token = "test_token".to_string();
 
     tokio::spawn(async move {
-        backend::infrastructure::twitch::spawn_twitch_client(widget_id, token, tx_clone).await;
+        backend::infrastructure::twitch::spawn_twitch_client(
+            widget_id,
+            token,
+            tx_clone,
+            tokio_util::sync::CancellationToken::new(),
+        )
+        .await;
     });
 
     // Accept websocket connection from the spawned client

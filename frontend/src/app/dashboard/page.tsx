@@ -1,33 +1,351 @@
+"use client";
+
+import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
+import {
+  CheckCircle2,
+  Circle,
+  ArrowRight,
+  Copy,
+  Check,
+  HelpCircle,
+  Radio,
+  Sliders,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { createClient } from "@/lib/supabase/client";
+import { useToast } from "@/components/ui/toast";
+import { ObsSetupGuideModal } from "@/components/obs/ObsSetupGuideModal";
+import { useOrigin } from "@/lib/use-origin";
+
+interface WidgetInfo {
+  id: string;
+  theme: string;
+  font_size: string;
+}
+
+function subscribeStorage(callback: () => void) {
+  window.addEventListener("storage", callback);
+  return () => window.removeEventListener("storage", callback);
+}
+
+function getCopiedSnapshot() {
+  return typeof window !== "undefined" && localStorage.getItem("streamsync_obs_copied") === "true";
+}
+
+function getServerCopiedSnapshot() {
+  return false;
+}
 
 export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [platforms, setPlatforms] = useState<string[]>([]);
+  const [widget, setWidget] = useState<WidgetInfo | null>(null);
+  const origin = useOrigin();
+  const [copied, setCopied] = useState(false);
+  const [localCopied, setLocalCopied] = useState(false);
+  const isCopiedInStorage = useSyncExternalStore(
+    subscribeStorage,
+    getCopiedSnapshot,
+    getServerCopiedSnapshot
+  );
+  const hasCopied = isCopiedInStorage || localCopied;
+  const [isGuideOpen, setIsGuideOpen] = useState(false);
+
+  const { success, error: toastError } = useToast();
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          const [tokensRes, widgetRes] = await Promise.all([
+            supabase.from("platform_tokens").select("platform"),
+            supabase
+              .from("widgets")
+              .select("id, theme, font_size")
+              .eq("user_id", user.id)
+              .maybeSingle(),
+          ]);
+
+          if (tokensRes.data) {
+            setPlatforms(tokensRes.data.map((p) => p.platform));
+          }
+
+          if (widgetRes.data) {
+            setWidget(widgetRes.data);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load dashboard data:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+  }, []);
+
+  const widgetUrl =
+    widget?.id && origin ? `${origin}/widget/${widget.id}` : "";
+
+  const handleCopy = async () => {
+    if (!widgetUrl) {
+      toastError("Widget not yet generated. Visit widget settings to create one.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(widgetUrl);
+      setCopied(true);
+      setLocalCopied(true);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("streamsync_obs_copied", "true");
+      }
+      success("Widget URL copied to clipboard!");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toastError("Failed to copy URL to clipboard.");
+    }
+  };
+
+  const isStep1Done = platforms.length > 0;
+  const isStep2Done = Boolean(widget?.id);
+  const isStep3Done = hasCopied;
+
+  const completedCount =
+    (isStep1Done ? 1 : 0) + (isStep2Done ? 1 : 0) + (isStep3Done ? 1 : 0);
+  const completionPercentage = Math.round((completedCount / 3) * 100);
+
   return (
-    <div className="flex flex-col gap-6">
-      <h1 className="text-3xl font-heading font-bold text-foreground">Dashboard</h1>
-      <p className="text-muted-foreground">Welcome to StreamSync. Select an option below to get started.</p>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="flex flex-col gap-8 max-w-5xl">
+      <div>
+        <h1 className="text-3xl font-heading font-bold text-foreground">
+          Dashboard Overview
+        </h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          Welcome to StreamSync. Complete the setup steps below to get your unified chat into OBS.
+        </p>
+      </div>
+
+      {/* Setup Progress Checklist Card */}
+      <div className="p-6 bg-card rounded-lg border border-border flex flex-col gap-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <span>Onboarding Progress</span>
+              <span className="text-sm font-normal text-muted-foreground">
+                ({completedCount} of 3 completed)
+              </span>
+            </h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Follow these three steps to bring live stream chats into your stream overlay.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold text-primary">
+              {completionPercentage}% Complete
+            </span>
+            <div className="w-28 h-2.5 bg-secondary rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-500 rounded-full"
+                style={{ width: `${completionPercentage}%` }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* 3 Steps */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Step 1: Connect Accounts */}
+          <div className="p-4 rounded-md border border-border/80 bg-background/50 flex flex-col justify-between gap-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Step 1
+                </span>
+                {isStep1Done ? (
+                  <CheckCircle2 className="h-5 w-5 text-primary" />
+                ) : (
+                  <Circle className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              <h3 className="font-semibold text-foreground mb-1">
+                Connect Accounts
+              </h3>
+              <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+                Connect your streaming accounts (Twitch, YouTube, Kick) to aggregate chat.
+              </p>
+              {loading ? (
+                <div className="text-xs text-muted-foreground">Loading status...</div>
+              ) : isStep1Done ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {platforms.map((p) => (
+                    <span
+                      key={p}
+                      className="px-2 py-0.5 text-[10px] font-semibold uppercase rounded bg-secondary text-secondary-foreground border border-border"
+                    >
+                      {p}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  No accounts connected yet
+                </span>
+              )}
+            </div>
+            <Link href="/dashboard/accounts">
+              <Button variant="outline" size="sm" className="w-full text-xs">
+                Manage Accounts
+                <ArrowRight className="h-3.5 w-3.5 ml-1" />
+              </Button>
+            </Link>
+          </div>
+
+          {/* Step 2: Customize Overlay */}
+          <div className="p-4 rounded-md border border-border/80 bg-background/50 flex flex-col justify-between gap-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Step 2
+                </span>
+                {isStep2Done ? (
+                  <CheckCircle2 className="h-5 w-5 text-primary" />
+                ) : (
+                  <Circle className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              <h3 className="font-semibold text-foreground mb-1">
+                Customize Overlay
+              </h3>
+              <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+                Tailor theme, font sizes, and background transparency for your overlay.
+              </p>
+              {loading ? (
+                <div className="text-xs text-muted-foreground">Loading status...</div>
+              ) : widget ? (
+                <div className="text-xs text-muted-foreground space-y-0.5">
+                  <div>
+                    Theme:{" "}
+                    <span className="font-medium text-foreground capitalize">
+                      {widget.theme || "Dark"}
+                    </span>
+                  </div>
+                  <div>
+                    Font Size:{" "}
+                    <span className="font-medium text-foreground">
+                      {widget.font_size || "16px"}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  Default settings loaded
+                </span>
+              )}
+            </div>
+            <Link href="/dashboard/widget">
+              <Button variant="outline" size="sm" className="w-full text-xs">
+                Customize Widget
+                <ArrowRight className="h-3.5 w-3.5 ml-1" />
+              </Button>
+            </Link>
+          </div>
+
+          {/* Step 3: Add to OBS */}
+          <div className="p-4 rounded-md border border-border/80 bg-background/50 flex flex-col justify-between gap-4">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Step 3
+                </span>
+                {isStep3Done ? (
+                  <CheckCircle2 className="h-5 w-5 text-primary" />
+                ) : (
+                  <Circle className="h-5 w-5 text-muted-foreground" />
+                )}
+              </div>
+              <h3 className="font-semibold text-foreground mb-1">Add to OBS</h3>
+              <p className="text-xs text-muted-foreground mb-3 leading-relaxed">
+                Copy your personal Browser Source URL and paste into OBS Studio.
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={handleCopy}
+                  disabled={!widgetUrl}
+                  className="w-full text-xs flex items-center justify-center gap-1.5"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="h-3.5 w-3.5 text-primary" />
+                      Copied to Clipboard!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3.5 w-3.5" />
+                      Quick Copy URL
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsGuideOpen(true)}
+              className="w-full text-xs flex items-center justify-center gap-1.5"
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+              View OBS Guide
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Navigation Quick Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Link href="/dashboard/accounts" className="block group">
           <div className="p-6 bg-card rounded-lg border border-border h-full transition-colors group-hover:border-primary">
             <h2 className="text-xl font-semibold mb-2 flex items-center justify-between">
-              Connected Accounts
+              <span className="flex items-center gap-2">
+                <Radio className="h-5 w-5 text-primary" />
+                Connected Accounts
+              </span>
               <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
             </h2>
-            <p className="text-muted-foreground">Manage your Twitch, YouTube, and Kick integrations.</p>
+            <p className="text-muted-foreground text-sm">
+              Connect or reconnect your Twitch, YouTube, and Kick integrations.
+            </p>
           </div>
         </Link>
-        
+
         <Link href="/dashboard/widget" className="block group">
           <div className="p-6 bg-card rounded-lg border border-border h-full transition-colors group-hover:border-primary">
             <h2 className="text-xl font-semibold mb-2 flex items-center justify-between">
-              Widget Settings
+              <span className="flex items-center gap-2">
+                <Sliders className="h-5 w-5 text-primary" />
+                Widget Settings
+              </span>
               <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
             </h2>
-            <p className="text-muted-foreground">Configure how your chat overlay looks on OBS.</p>
+            <p className="text-muted-foreground text-sm">
+              Adjust your chat overlay styling, view live preview, and copy source URL.
+            </p>
           </div>
         </Link>
       </div>
+
+      <ObsSetupGuideModal
+        isOpen={isGuideOpen}
+        onClose={() => setIsGuideOpen(false)}
+        widgetUrl={widgetUrl}
+      />
     </div>
   );
 }
