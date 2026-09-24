@@ -178,6 +178,55 @@ Every ticket uses this structure:
 
 ---
 
+## 13: Backend Widget Session Refactor
+
+**What to build:** Give each active widget one backend session that owns its broadcast channel, platform worker lifecycle, and connection cleanup while preserving existing chat and pin behavior.
+
+**Blocked by:** 10: Message Highlight Overlay & Dashboard Pin Control.
+
+**Status:** done
+
+- [x] Concurrent widget connections share one ingestion run and receive the same widget-scoped feed.
+- [x] Final disconnect cancels the matching run; reconnect starts a fresh working session without stale cleanup interference.
+- [x] Twitch EventSub, Kick Pusher, and YouTube discovery and chat polling behavior remain unchanged.
+- [x] YouTube makes no further broadcast discovery calls during successful chat polling and may rediscover after terminal chat failure.
+- [x] Pin snapshot, broadcast, and socket close behavior remain unchanged.
+- [x] Backend lifecycle and polling regression tests pass with the approved Webpack build substitute.
+
+---
+
+## 14: Backend Pin State Refactor
+
+**What to build:** Move pin and unpin transitions and reconnect snapshot preparation into the backend application pin module while preserving the existing authorization, revisioned event, and widget-scoped delivery behavior.
+
+**Blocked by:** 13: Backend Widget Session Refactor.
+
+**Status:** done
+
+- [x] Application pin workflow owns validation, persistence coordination, event construction, publication, and snapshot preparation.
+- [x] HTTP and WebSocket transport retain authorization, status mapping, socket I/O, and snapshot-first delivery.
+- [x] Pin, replacement, unpin, failures, widget isolation, and reconnect ordering retain their current behavior.
+- [x] Application-level tests cover transitions using a fake database boundary and the real widget publisher.
+- [x] Verification passed with the approved environment-only Webpack build substitute.
+
+---
+
+## 15: Restore Pin Control After Widget Settings Refresh
+
+**What to build:** Keep Widget Settings on the owned widget chosen for OBS across refresh, and let a streamer recover control of an existing widget when their account has multiple rows.
+
+**Blocked by:** 14: Backend Pin State Refactor.
+
+**Status:** done
+
+- [x] Ambiguous widget lookups never create a new row.
+- [x] Multiple owned widgets can be selected by UUID with a safe pin preview; the choice survives refresh in the same browser.
+- [x] Widget Settings and dashboard home use the same validated selection for URLs and controls.
+- [x] Selecting the OBS widget reconnects the pin panel to its persisted pin and unpin action without changing its public URL. Live OBS verification remains outstanding.
+- [x] Frontend and backend verification gates pass with the approved environment-only Webpack build substitute.
+
+---
+
 ## Verification Commands
 
 | Step | Command | Purpose |

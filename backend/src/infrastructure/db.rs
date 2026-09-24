@@ -1,5 +1,33 @@
+use crate::application::pin::{PinError, PinFuture, PinSnapshot, PinStorage};
+use crate::domain::message::ChatMessage;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+pub struct PostgresPins<'a> {
+    pub pool: &'a PgPool,
+}
+
+impl PinStorage for PostgresPins<'_> {
+    fn save<'a>(
+        &'a self,
+        widget_id: &'a Uuid,
+        message: Option<&'a ChatMessage>,
+    ) -> PinFuture<'a, Option<i64>> {
+        Box::pin(async move {
+            save_pin(self.pool, widget_id, message)
+                .await
+                .map_err(|_| PinError::Storage)
+        })
+    }
+
+    fn load<'a>(&'a self, widget_id: &'a Uuid) -> PinFuture<'a, Option<PinSnapshot>> {
+        Box::pin(async move {
+            load_pin(self.pool, widget_id)
+                .await
+                .map_err(|_| PinError::Storage)
+        })
+    }
+}
 
 #[derive(Debug)]
 pub struct PlatformTokens {

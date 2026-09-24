@@ -18,5 +18,27 @@ Tracks every UI component built.
 | ObsSetupGuideModal | `frontend/src/components/obs/ObsSetupGuideModal.tsx` | Step-by-step OBS browser source setup guide modal | Modal / Dialog Pattern |
 | PinDashboard | `frontend/src/components/widget/PinDashboard.tsx` | Live dashboard feed with pin controls, status, highlight URL, and OBS size guidance | Card / Live Feed Pattern |
 | HighlightClient | `frontend/src/components/widget/HighlightClient.tsx` | Public OBS overlay for the active pinned message with entry and exit transitions | Transparent Overlay / Transition Pattern |
+| Widget selector | `frontend/src/app/dashboard/widget/page.tsx` | Selects an existing owned widget by UUID to restore OBS and pin controls | Card / Selectable Row Pattern |
 
 The public chat widget page marks its document with `.widget-source` so the page background stays transparent. The configured background remains on the inner `WidgetClient` overlay. The Widget Settings page uses the dashboard's main scroller for its controls, preview, and highlight panel.
+
+Tickets 13 and 14 changed backend architecture only; no UI components were added or changed.
+
+### Widget selector
+
+File: `frontend/src/app/dashboard/widget/page.tsx`
+Last updated: 2026-09-24
+
+| Property | Class |
+| --- | --- |
+| Background | `bg-card` container; `bg-background` unselected row; `bg-primary/10` selected row |
+| Border | `border border-border` container and unselected row; `border-primary` selected row |
+| Border radius | `rounded-lg` container; `rounded-md` row |
+| Text — primary | `text-foreground` UUID |
+| Text — secondary | `text-muted-foreground` instruction and pin preview |
+| Text size | `text-xl font-semibold` heading; `text-sm` body and row text |
+| Spacing | `p-6 space-y-4` container; `p-4` row; `space-y-2` row list |
+| Hover state | `hover:bg-secondary` unselected row |
+| Accent usage | `border-primary bg-primary/10` selected row |
+
+**Pattern notes:** Show the full UUID in `font-mono` so streamers can match an existing OBS source. Show only validated pin text in the secondary line. Keep source URLs and pin controls inactive until a widget is selected.

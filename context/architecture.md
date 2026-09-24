@@ -16,6 +16,8 @@
 - `frontend/` — Next.js frontend, responsible for user auth, dashboard UI, widget configuration UI, and rendering the OBS widget overlay.
 - `backend/` — Rust backend, responsible for maintaining persistent WebSocket connections to external platforms (Twitch, Kick, YouTube), parsing incoming messages, and broadcasting them.
 
+Within the Rust backend, one widget session owns each active widget's broadcast channel, ingestion worker run, and final-connection cleanup. The application pin module owns validated pin transitions and persisted snapshot preparation. The web transport owns authorization, status mapping, and socket I/O; the PostgreSQL adapter owns pin storage queries. Widget subscribers register before snapshot loading, and the snapshot is sent before queued live events.
+
 ## Storage Model
 
 - **Supabase PostgreSQL**: User accounts, platform integration tokens (encrypted), widget configurations.
@@ -26,6 +28,7 @@
 - Authentication is managed via Supabase Auth (JWT).
 - User secrets (tokens for Twitch/YouTube/Kick) must be encrypted at rest and never logged in plaintext.
 - The OBS widget route (e.g. `/widget/:id`) is public and requires no active session, relying solely on a secure, non-guessable UUID for access.
+- When a user owns multiple widget rows, the dashboard remembers the selected UUID in browser storage as a preference. It rechecks that UUID against the authenticated user's owned rows before using it; pin mutations still enforce ownership server-side.
 
 ## Invariants
 

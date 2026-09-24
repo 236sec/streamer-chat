@@ -8,7 +8,11 @@ async fn pin_command_requires_server_secret() {
     let state = Arc::new(AppState::default());
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    tokio::spawn(async move { axum::serve(listener, create_router(state)).await.unwrap() });
+    tokio::spawn(async move {
+        axum::serve(listener, create_router(state.clone()))
+            .await
+            .unwrap()
+    });
     let response = reqwest::Client::new()
         .post(format!(
             "http://{address}/internal/widgets/00000000-0000-0000-0000-000000000001/pin"
@@ -144,7 +148,12 @@ async fn widget_connection_closes_when_pin_snapshot_cannot_load() {
     let state = Arc::new(AppState::new(pool));
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    tokio::spawn(async move { axum::serve(listener, create_router(state)).await.unwrap() });
+    let server_state = state.clone();
+    tokio::spawn(async move {
+        axum::serve(listener, create_router(server_state))
+            .await
+            .unwrap()
+    });
     let widget_id = uuid::Uuid::new_v4();
     let (mut ws, _) = connect_async(format!("ws://{address}/ws/widget/{widget_id}"))
         .await
@@ -155,4 +164,5 @@ async fn widget_connection_closes_when_pin_snapshot_cannot_load() {
         .unwrap()
         .unwrap();
     assert!(frame.is_close());
+    assert_eq!(state.session_count(), 0);
 }

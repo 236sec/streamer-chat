@@ -8,7 +8,12 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useOrigin } from "@/lib/use-origin";
 
-export function PinDashboard({ widgetId }: { widgetId: string }) {
+interface PinDashboardProps {
+  widgetId: string;
+  onPinChange?: (widgetId: string, message: ChatMessage | null) => void;
+}
+
+export function PinDashboard({ widgetId, onPinChange }: PinDashboardProps) {
   const origin = useOrigin();
   const [feed, setFeed] = useState<ChatMessage[]>([]);
   const [active, setActive] = useState<ChatMessage | null>(null);
@@ -48,6 +53,7 @@ export function PinDashboard({ widgetId }: { widgetId: string }) {
           if (pin.success && pin.data.revision > revision.current) {
             revision.current = pin.data.revision;
             setActive(pin.data.message);
+            onPinChange?.(widgetId, pin.data.message);
           }
         } catch { /* Ignore malformed public frames. */ }
       };
@@ -60,7 +66,7 @@ export function PinDashboard({ widgetId }: { widgetId: string }) {
     };
     connect();
     return () => { stopped = true; clearTimeout(timer); socket?.close(); };
-  }, [widgetId]);
+  }, [widgetId, onPinChange]);
 
   const mutate = async (message: ChatMessage | null) => {
     setError("");
@@ -80,6 +86,7 @@ export function PinDashboard({ widgetId }: { widgetId: string }) {
       if (event.revision > revision.current) {
         revision.current = event.revision;
         setActive(event.message);
+        onPinChange?.(widgetId, event.message);
       }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Pin change failed");

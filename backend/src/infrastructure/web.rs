@@ -13,7 +13,7 @@ use futures::{sink::SinkExt, stream::StreamExt};
 use serde::Deserialize;
 use std::sync::Arc;
 
-use crate::application::pin::{validate_command, PinCommand, PinEvent};
+use crate::application::pin::{self, PinCommand, PinError, PinEvent};
 use crate::application::state::AppState;
 
 #[derive(Deserialize)]
@@ -59,35 +59,18 @@ async fn pin_handler(
         return Err(StatusCode::UNAUTHORIZED);
     }
     let widget_id = uuid::Uuid::parse_str(&id).map_err(|_| StatusCode::BAD_REQUEST)?;
-    if !validate_command(&command, &id) {
+    if !pin::validate_command(&command, &id) {
         return Err(StatusCode::BAD_REQUEST);
     }
     let pool = state.pool.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
-    let lock = state.pin_lock(&id).await;
-    let _guard = lock.lock().await;
-    let message = match command {
-        PinCommand::Pin { message } => Some(*message),
-        PinCommand::Unpin => None,
-    };
-    let revision = crate::infrastructure::db::save_pin(pool, &widget_id, message.as_ref())
+    let storage = crate::infrastructure::db::PostgresPins { pool };
+    let event = pin::transition(&state, &storage, &id, &widget_id, command)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
-    let event = PinEvent {
-        r#type: if message.is_some() {
-            "pin_message"
-        } else {
-            "unpin_message"
-        }
-        .to_string(),
-        revision,
-        message,
-    };
-    if let Some(channel) = state.widget_channels.read().await.get(&id) {
-        if let Ok(json) = serde_json::to_string(&event) {
-            let _ = channel.send(json);
-        }
-    }
+        .map_err(|error| match error {
+            PinError::InvalidCommand => StatusCode::BAD_REQUEST,
+            PinError::MissingWidget => StatusCode::NOT_FOUND,
+            PinError::Storage | PinError::Serialization => StatusCode::INTERNAL_SERVER_ERROR,
+        })?;
     Ok(Json(event))
 }
 
@@ -107,26 +90,22 @@ async fn handle_socket(
         connection_type
     );
 
-    let tx = match &widget_id {
-        Some(id) => state.get_or_create_channel(id, mock).await,
-        None => state.tx.clone(),
-    };
-    let mut rx = tx.subscribe();
+    let mut widget_connection = widget_id.as_ref().map(|id| state.acquire_widget(id, mock));
+    let tx = widget_connection
+        .as_ref()
+        .map_or_else(|| state.tx.clone(), |connection| connection.tx.clone());
+    let mut rx = widget_connection.as_mut().map_or_else(
+        || state.tx.subscribe(),
+        |connection| connection.take_receiver(),
+    );
 
     let snapshot = if let (Some(id), Some(pool)) = (&widget_id, &state.pool) {
         if let Ok(uuid) = uuid::Uuid::parse_str(id) {
-            let lock = state.pin_lock(id).await;
-            let _guard = lock.lock().await;
-            match crate::infrastructure::db::load_pin(pool, &uuid).await {
-                Ok(Some(pin)) => Some(pin),
-                Ok(None) => {
-                    let _ = socket.send(Message::Close(None)).await;
-                    return;
-                }
-                Err(error) => {
-                    eprintln!(
-                        "[WebSocket Backend] Failed to load pin state for Widget({id}): {error}"
-                    );
+            let storage = crate::infrastructure::db::PostgresPins { pool };
+            match pin::snapshot(&state, &storage, id, &uuid).await {
+                Ok((_, json)) => Some(json),
+                Err(_) => {
+                    eprintln!("[WebSocket Backend] Failed to load pin state for Widget({id})");
                     let _ = socket.send(Message::Close(None)).await;
                     return;
                 }
@@ -139,16 +118,9 @@ async fn handle_socket(
     };
 
     let (mut sender, mut receiver) = socket.split();
-    if let Some((revision, message)) = snapshot {
-        let event = PinEvent {
-            r#type: "pin_state".to_string(),
-            revision,
-            message,
-        };
-        if let Ok(json) = serde_json::to_string(&event) {
-            if sender.send(Message::Text(json)).await.is_err() {
-                return;
-            }
+    if let Some(json) = snapshot {
+        if sender.send(Message::Text(json)).await.is_err() {
+            return;
         }
     }
 
@@ -230,17 +202,5 @@ async fn handle_socket(
 
     println!("[WebSocket Backend] Connection closed: {}", connection_type);
 
-    if let Some(id) = widget_id {
-        let mut channels = state.widget_channels.write().await;
-        if let Some(channel) = channels.get(&id) {
-            if channel.receiver_count() == 0 {
-                println!("[WebSocket Backend] Cleaning up channel for Widget({})", id);
-                channels.remove(&id);
-                let mut workers = state.widget_workers.write().await;
-                if let Some((_flag, cancel_token)) = workers.remove(&id) {
-                    cancel_token.cancel();
-                }
-            }
-        }
-    }
+    drop(widget_connection);
 }
