@@ -3,6 +3,44 @@ use crate::domain::message::ChatMessage;
 use sqlx::PgPool;
 use uuid::Uuid;
 
+pub struct WidgetIdentity {
+    pub canonical_id: Uuid,
+    pub mapped: bool,
+}
+
+pub async fn widget_identity(
+    pool: &PgPool,
+    addressed: &Uuid,
+) -> Result<Option<WidgetIdentity>, sqlx::Error> {
+    use sqlx::Row;
+    let row = sqlx::query(
+        "SELECT COALESCE(identity.widget_id, addressed.id) AS canonical_id, \
+         identity.widget_id IS NOT NULL AS mapped \
+         FROM widgets addressed \
+         LEFT JOIN widget_identities identity ON identity.user_id = addressed.user_id \
+         WHERE addressed.id = $1",
+    )
+    .bind(addressed)
+    .fetch_optional(pool)
+    .await?;
+    row.map(|value| {
+        Ok(WidgetIdentity {
+            canonical_id: value.try_get("canonical_id")?,
+            mapped: value.try_get("mapped")?,
+        })
+    })
+    .transpose()
+}
+
+pub async fn canonical_widget_id(
+    pool: &PgPool,
+    addressed: &Uuid,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    Ok(widget_identity(pool, addressed)
+        .await?
+        .map(|identity| identity.canonical_id))
+}
+
 pub struct PostgresPins<'a> {
     pub pool: &'a PgPool,
 }

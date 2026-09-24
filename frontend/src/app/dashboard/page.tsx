@@ -17,7 +17,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast";
 import { ObsSetupGuideModal } from "@/components/obs/ObsSetupGuideModal";
 import { useOrigin } from "@/lib/use-origin";
-import { listOwnedWidgets, resolveSelectedWidget, type WidgetRecord } from "@/lib/widget-selection";
+import { resolveAccountWidget, type WidgetRecord } from "@/lib/widget-selection";
 
 function subscribeStorage(callback: () => void) {
   window.addEventListener("storage", callback);
@@ -36,7 +36,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [platforms, setPlatforms] = useState<string[]>([]);
   const [widget, setWidget] = useState<WidgetRecord | null>(null);
-  const [needsSelection, setNeedsSelection] = useState(false);
   const [widgetError, setWidgetError] = useState("");
   const origin = useOrigin();
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -61,7 +60,6 @@ export default function DashboardPage() {
       setWidget(null);
       setPlatforms([]);
       setCopiedId(null);
-      setNeedsSelection(false);
       setWidgetError("");
       setLoading(true);
       try {
@@ -69,15 +67,13 @@ export default function DashboardPage() {
         if (!mounted || currentRequest !== request) return;
         if (authError) throw new Error(authError.message);
         if (!user) return;
-        const [tokensRes, widgets] = await Promise.all([
+        const [tokensRes, canonical] = await Promise.all([
           supabase.from("platform_tokens").select("platform"),
-          listOwnedWidgets(user.id),
+          resolveAccountWidget(),
         ]);
         if (!mounted || currentRequest !== request) return;
         if (tokensRes.data) setPlatforms(tokensRes.data.map((p) => p.platform));
-        const selected = resolveSelectedWidget(widgets, user.id);
-        setWidget(selected);
-        setNeedsSelection(widgets.length > 1 && !selected);
+        setWidget(canonical);
       } catch (err) {
         if (mounted && currentRequest === request) {
           setWidgetError(err instanceof Error ? err.message : "Failed to load widgets.");
@@ -87,13 +83,7 @@ export default function DashboardPage() {
       }
     }
 
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === null || event.key.startsWith("streamsync_selected_widget:")) {
-        void revalidate();
-      }
-    };
     const onFocus = () => { void revalidate(); };
-    window.addEventListener("storage", onStorage);
     window.addEventListener("focus", onFocus);
     const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
       const timer = setTimeout(() => {
@@ -106,7 +96,6 @@ export default function DashboardPage() {
     return () => {
       mounted = false;
       request += 1;
-      window.removeEventListener("storage", onStorage);
       window.removeEventListener("focus", onFocus);
       subscription.unsubscribe();
       authTimers.forEach(clearTimeout);
@@ -155,7 +144,6 @@ export default function DashboardPage() {
       </div>
 
       {widgetError && <p role="alert" className="rounded-md border border-destructive p-4 text-sm text-destructive">{widgetError}</p>}
-      {needsSelection && <p className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">Select the UUID from your active OBS highlight URL in <Link className="text-primary underline" href="/dashboard/widget">Widget Settings</Link> to enable source URLs and pin controls.</p>}
 
       {/* Setup Progress Checklist Card */}
       <div className="p-6 bg-card rounded-lg border border-border flex flex-col gap-6">

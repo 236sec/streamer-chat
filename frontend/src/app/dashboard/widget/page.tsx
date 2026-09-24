@@ -12,13 +12,10 @@ import { ObsSetupGuideModal } from "@/components/obs/ObsSetupGuideModal";
 import { useOrigin } from "@/lib/use-origin";
 import { Copy, Check, HelpCircle, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { listOwnedWidgets, parseWidgetRecord, pinPreview, resolveSelectedWidget, selectedWidgetKey, type WidgetRecord } from "@/lib/widget-selection";
-import type { ChatMessage } from "@/lib/pin";
+import { resolveAccountWidget, type WidgetRecord } from "@/lib/widget-selection";
 
 export default function WidgetSettingsPage() {
   const [widgetId, setWidgetId] = useState<string | null>(null);
-  const [widgets, setWidgets] = useState<WidgetRecord[]>([]);
-  const [userId, setUserId] = useState<string | null>(null);
   const [loadError, setLoadError] = useState("");
   const [theme, setTheme] = useState("dark");
   const [fontSize, setFontSize] = useState("16px");
@@ -60,16 +57,7 @@ export default function WidgetSettingsPage() {
   const clearAccount = useCallback(() => {
     accountRef.current = null;
     clearWidget();
-    setWidgets([]);
-    setUserId(null);
   }, [clearWidget]);
-
-  const updatePinPreview = useCallback((id: string, message: ChatMessage | null) => {
-    if (message && message.widget_id !== id) return;
-    setWidgets((current) => current.map((widget) =>
-      widget.id === id ? { ...widget, pinned_message: message } : widget
-    ));
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -94,34 +82,12 @@ export default function WidgetSettingsPage() {
           clearAccount();
           accountRef.current = user.id;
         }
-        const owned = await listOwnedWidgets(user.id);
+        const canonical = await resolveAccountWidget();
         if (!mounted || currentRequest !== request) return;
-        setUserId(user.id);
-        if (owned.length === 0) {
+        if (canonical.id !== selectedIdRef.current) {
           clearWidget();
-          setWidgets([]);
-          const { data: newWidget, error: insertError } = await supabase
-            .from("widgets")
-            .insert({
-              user_id: user.id,
-              auto_hide_seconds: 0,
-              layout_style: "card",
-            })
-            .select("*")
-            .single();
-          if (!mounted || currentRequest !== request) return;
-          if (insertError) throw new Error(insertError.message || "Failed to initialize widget.");
-          const created = parseWidgetRecord(newWidget);
-          selectWidget(created);
-          setWidgets([created]);
-          return;
+          selectWidget(canonical);
         }
-        const selected = resolveSelectedWidget(owned, user.id);
-        if (selected?.id !== selectedIdRef.current) {
-          clearWidget();
-          if (selected) selectWidget(selected);
-        }
-        setWidgets(owned);
       } catch (cause) {
         if (!mounted || currentRequest !== request) return;
         if (!sameAccountConfirmed) clearAccount();
@@ -130,13 +96,7 @@ export default function WidgetSettingsPage() {
         toastError(message, "Loading Failed");
       }
     };
-    const onStorage = (event: StorageEvent) => {
-      if (event.key === null || event.key.startsWith("streamsync_selected_widget:")) {
-        void revalidate();
-      }
-    };
     const onFocus = () => { void revalidate(); };
-    window.addEventListener("storage", onStorage);
     window.addEventListener("focus", onFocus);
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_OUT" || (accountRef.current && session?.user.id && session.user.id !== accountRef.current)) {
@@ -154,7 +114,6 @@ export default function WidgetSettingsPage() {
     return () => {
       mounted = false;
       request += 1;
-      window.removeEventListener("storage", onStorage);
       window.removeEventListener("focus", onFocus);
       subscription.unsubscribe();
       authTimers.forEach(clearTimeout);
@@ -257,32 +216,6 @@ export default function WidgetSettingsPage() {
       </div>
 
       {loadError && <p role="alert" className="rounded-md border border-destructive p-4 text-sm text-destructive">{loadError}</p>}
-      {widgets.length > 1 && (
-        <section className="rounded-lg border border-border bg-card p-6 space-y-4">
-          <div>
-            <h2 className="text-xl font-semibold">Select your OBS widget</h2>
-            <p className="text-sm text-muted-foreground">Match the full UUID in your active OBS highlight URL. Select that widget to manage its pin and source URLs.</p>
-          </div>
-          <div className="space-y-2">
-            {widgets.map((widget) => (
-              <button
-                key={widget.id}
-                type="button"
-                aria-pressed={widgetId === widget.id}
-                onClick={() => {
-                  if (!userId) return;
-                  window.localStorage.setItem(selectedWidgetKey(userId), widget.id);
-                  selectWidget(widget);
-                }}
-                className={cn("w-full rounded-md border p-4 text-left transition-colors", widgetId === widget.id ? "border-primary bg-primary/10" : "border-border bg-background hover:bg-secondary")}
-              >
-                <span className="block break-all font-mono text-sm text-foreground">{widget.id}</span>
-                <span className="mt-1 block break-words text-sm text-muted-foreground">{pinPreview(widget) ?? "No valid current pin"}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Settings Panel */}
@@ -418,7 +351,7 @@ export default function WidgetSettingsPage() {
             <div className="flex gap-2">
               <Input
                 readOnly
-                value={widgetUrl || (widgets.length > 1 ? "Select a widget above" : "Generating...")}
+                value={widgetUrl || "Generating..."}
                 className="font-mono text-xs"
               />
               <Button
@@ -482,7 +415,7 @@ export default function WidgetSettingsPage() {
         </div>
       </div>
 
-      {widgetId && <PinDashboard key={widgetId} widgetId={widgetId} onPinChange={updatePinPreview} />}
+      {widgetId && <PinDashboard key={widgetId} widgetId={widgetId} />}
 
       <ObsSetupGuideModal
         isOpen={isGuideOpen}

@@ -227,6 +227,24 @@ Every ticket uses this structure:
 
 ---
 
+## 16: One Permanent Widget UUID Per Account
+
+**What to build:** Give each account one permanent canonical widget UUID shared by chat and highlight, keep legacy rows and OBS URLs working, and make public UUID lookup non-enumerable.
+
+**Blocked by:** 15: Restore Pin Control After Widget Settings Refresh.
+
+**Status:** done
+
+- [x] Existing single-row accounts retain their UUID; duplicate owners use a validated copied-chat hint when available, then a documented deterministic fallback.
+- [x] A private, unique account identity mapping makes legacy chat and highlight URLs use the canonical live stream and pin state after first resolution; legacy rows remain stored.
+- [x] Dashboard home and Widget Settings show one canonical identity without a UUID chooser or URL paste step.
+- [x] Concurrent account loads cannot create duplicate canonical identities or new duplicate rows; no global backfill or legacy-row deletion is required.
+- [x] Public routes resolve a known UUID, while anonymous database clients cannot enumerate widget IDs; owner dashboard reads do not surface legacy rows.
+- [x] Existing pin content remains readable and usable; platform tokens remain encrypted.
+- [x] Verification and review gates pass for the approved feature spec. Disposable-database and live OBS end-to-end checks remain outstanding.
+
+---
+
 ## Verification Commands
 
 | Step | Command | Purpose |

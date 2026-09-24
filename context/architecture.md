@@ -18,9 +18,11 @@
 
 Within the Rust backend, one widget session owns each active widget's broadcast channel, ingestion worker run, and final-connection cleanup. The application pin module owns validated pin transitions and persisted snapshot preparation. The web transport owns authorization, status mapping, and socket I/O; the PostgreSQL adapter owns pin storage queries. Widget subscribers register before snapshot loading, and the snapshot is sent before queued live events.
 
+An OBS socket opened before its account's first identity mapping checks for that mapping every five seconds. Once mapping exists, it acquires the canonical session, sends the canonical pin snapshot, and releases the old session and worker without requiring an OBS refresh. The checks stop after mapping. Existing widget worker cancellation and YouTube polling lifecycle remain owned by the session.
+
 ## Storage Model
 
-- **Supabase PostgreSQL**: User accounts, platform integration tokens (encrypted), widget configurations.
+- **Supabase PostgreSQL**: User accounts, platform integration tokens (encrypted), widget configurations, and a private unique account-to-canonical-widget mapping. Legacy widget rows remain as aliases. An authenticated transactional resolver creates or chooses the permanent canonical UUID, validates an optional copied-chat hint, and reconciles pin state. A scoped public lookup resolves one known UUID to overlay fields without granting table-wide public reads.
 - **Redis**: Real-time message brokering, short-lived session states, rate limiting.
 
 ## Auth and Access Model
@@ -28,7 +30,7 @@ Within the Rust backend, one widget session owns each active widget's broadcast 
 - Authentication is managed via Supabase Auth (JWT).
 - User secrets (tokens for Twitch/YouTube/Kick) must be encrypted at rest and never logged in plaintext.
 - The OBS widget route (e.g. `/widget/:id`) is public and requires no active session, relying solely on a secure, non-guessable UUID for access.
-- When a user owns multiple widget rows, the dashboard remembers the selected UUID in browser storage as a preference. It rechecks that UUID against the authenticated user's owned rows before using it; pin mutations still enforce ownership server-side.
+- Each account has one mapped canonical widget UUID. The dashboard resolves it through an authenticated database function and uses it for chat, highlight, appearance, and pin controls. Public legacy URLs resolve to the canonical row after mapping. Backend widget subscriptions canonicalize before acquiring a session or switch after first mapping, and pin mutations require the canonical UUID. Authenticated table updates are limited to canonical appearance columns; pin state is written through the authorized backend command path.
 
 ## Invariants
 
