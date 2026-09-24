@@ -184,7 +184,7 @@ export default function WidgetSettingsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 h-full">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-heading font-bold text-foreground">
@@ -204,9 +204,9 @@ export default function WidgetSettingsPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Settings Panel */}
-        <div className="p-6 bg-card rounded-lg border border-border flex flex-col gap-6 lg:col-span-1 overflow-y-auto max-h-[calc(100vh-8rem)]">
+        <div className="p-6 bg-card rounded-lg border border-border flex flex-col gap-6 lg:col-span-1">
           <div>
             <h2 className="text-xl font-semibold mb-2">Appearance</h2>
             <p className="text-muted-foreground text-sm mb-4">
@@ -373,7 +373,7 @@ export default function WidgetSettingsPage() {
             </span>
           </div>
 
-          <div className="flex-1 rounded-md border border-dashed border-border overflow-auto relative bg-background/30 flex items-center justify-center p-8">
+          <div className="flex-1 rounded-md border border-dashed border-border overflow-auto relative bg-background/30 flex p-8">
             {/* Checkerboard background for transparent preview */}
             <div
               className="absolute inset-0 z-0 opacity-10 pointer-events-none"
@@ -385,7 +385,7 @@ export default function WidgetSettingsPage() {
               }}
             />
             <div
-              className="relative z-10 shadow-2xl border border-border/50 bg-background/50 flex-shrink-0"
+              className="relative z-10 shadow-2xl border border-border/50 bg-background/50 flex-shrink-0 m-auto"
               style={{ width: `${width}px`, height: `${height}px` }}
             >
               <WidgetClient

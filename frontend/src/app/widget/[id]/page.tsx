@@ -45,14 +45,16 @@ export default async function WidgetPage(props: PageProps) {
     "card";
 
   return (
-    <WidgetClient
-      widgetId={widget.id}
-      theme={widget.theme}
-      fontSize={widget.font_size}
-      backgroundColor={widget.background_color}
-      autoHideSeconds={autoHideSeconds}
-      layoutStyle={layoutStyle}
-      mock={mock}
-    />
+    <main className="widget-source fixed inset-0">
+      <WidgetClient
+        widgetId={widget.id}
+        theme={widget.theme}
+        fontSize={widget.font_size}
+        backgroundColor={widget.background_color}
+        autoHideSeconds={autoHideSeconds}
+        layoutStyle={layoutStyle}
+        mock={mock}
+      />
+    </main>
   );
 }

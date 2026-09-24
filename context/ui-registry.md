@@ -18,3 +18,5 @@ Tracks every UI component built.
 | ObsSetupGuideModal | `frontend/src/components/obs/ObsSetupGuideModal.tsx` | Step-by-step OBS browser source setup guide modal | Modal / Dialog Pattern |
 | PinDashboard | `frontend/src/components/widget/PinDashboard.tsx` | Live dashboard feed with pin controls, status, highlight URL, and OBS size guidance | Card / Live Feed Pattern |
 | HighlightClient | `frontend/src/components/widget/HighlightClient.tsx` | Public OBS overlay for the active pinned message with entry and exit transitions | Transparent Overlay / Transition Pattern |
+
+The public chat widget page marks its document with `.widget-source` so the page background stays transparent. The configured background remains on the inner `WidgetClient` overlay. The Widget Settings page uses the dashboard's main scroller for its controls, preview, and highlight panel.
