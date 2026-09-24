@@ -1,5 +1,71 @@
+use crate::application::pin::{PinError, PinFuture, PinSnapshot, PinStorage};
+use crate::domain::message::ChatMessage;
 use sqlx::PgPool;
 use uuid::Uuid;
+
+pub struct WidgetIdentity {
+    pub canonical_id: Uuid,
+    pub mapped: bool,
+}
+
+pub async fn widget_identity(
+    pool: &PgPool,
+    addressed: &Uuid,
+) -> Result<Option<WidgetIdentity>, sqlx::Error> {
+    use sqlx::Row;
+    let row = sqlx::query(
+        "SELECT COALESCE(identity.widget_id, addressed.id) AS canonical_id, \
+         identity.widget_id IS NOT NULL AS mapped \
+         FROM widgets addressed \
+         LEFT JOIN widget_identities identity ON identity.user_id = addressed.user_id \
+         WHERE addressed.id = $1",
+    )
+    .bind(addressed)
+    .fetch_optional(pool)
+    .await?;
+    row.map(|value| {
+        Ok(WidgetIdentity {
+            canonical_id: value.try_get("canonical_id")?,
+            mapped: value.try_get("mapped")?,
+        })
+    })
+    .transpose()
+}
+
+pub async fn canonical_widget_id(
+    pool: &PgPool,
+    addressed: &Uuid,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    Ok(widget_identity(pool, addressed)
+        .await?
+        .map(|identity| identity.canonical_id))
+}
+
+pub struct PostgresPins<'a> {
+    pub pool: &'a PgPool,
+}
+
+impl PinStorage for PostgresPins<'_> {
+    fn save<'a>(
+        &'a self,
+        widget_id: &'a Uuid,
+        message: Option<&'a ChatMessage>,
+    ) -> PinFuture<'a, Option<i64>> {
+        Box::pin(async move {
+            save_pin(self.pool, widget_id, message)
+                .await
+                .map_err(|_| PinError::Storage)
+        })
+    }
+
+    fn load<'a>(&'a self, widget_id: &'a Uuid) -> PinFuture<'a, Option<PinSnapshot>> {
+        Box::pin(async move {
+            load_pin(self.pool, widget_id)
+                .await
+                .map_err(|_| PinError::Storage)
+        })
+    }
+}
 
 #[derive(Debug)]
 pub struct PlatformTokens {
@@ -85,4 +151,40 @@ pub fn decrypt_token(encrypted: &str, key_hex: &str) -> String {
         Ok(plaintext) => String::from_utf8(plaintext).unwrap_or_default(),
         Err(_) => encrypted.to_string(), // fallback
     }
+}
+
+pub async fn load_pin(
+    pool: &PgPool,
+    widget_id: &Uuid,
+) -> Result<Option<(i64, Option<crate::domain::message::ChatMessage>)>, sqlx::Error> {
+    use sqlx::Row;
+    let row = sqlx::query("SELECT pin_revision, pinned_message FROM widgets WHERE id = $1")
+        .bind(widget_id)
+        .fetch_optional(pool)
+        .await?;
+    row.map(|r| {
+        let revision: i64 = r.try_get("pin_revision")?;
+        let value: Option<serde_json::Value> = r.try_get("pinned_message")?;
+        let message = value
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+        Ok((revision, message))
+    })
+    .transpose()
+}
+
+pub async fn save_pin(
+    pool: &PgPool,
+    widget_id: &Uuid,
+    message: Option<&crate::domain::message::ChatMessage>,
+) -> Result<Option<i64>, sqlx::Error> {
+    use sqlx::Row;
+    let value = message
+        .map(serde_json::to_value)
+        .transpose()
+        .map_err(|e| sqlx::Error::Encode(Box::new(e)))?;
+    let row = sqlx::query("UPDATE widgets SET pinned_message = $2, pin_revision = pin_revision + 1 WHERE id = $1 RETURNING pin_revision")
+        .bind(widget_id).bind(value).fetch_optional(pool).await?;
+    row.map(|r| r.try_get("pin_revision")).transpose()
 }

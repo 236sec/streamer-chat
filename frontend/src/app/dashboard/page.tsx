@@ -17,12 +17,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/toast";
 import { ObsSetupGuideModal } from "@/components/obs/ObsSetupGuideModal";
 import { useOrigin } from "@/lib/use-origin";
-
-interface WidgetInfo {
-  id: string;
-  theme: string;
-  font_size: string;
-}
+import { resolveAccountWidget, type WidgetRecord } from "@/lib/widget-selection";
 
 function subscribeStorage(callback: () => void) {
   window.addEventListener("storage", callback);
@@ -30,83 +25,100 @@ function subscribeStorage(callback: () => void) {
 }
 
 function getCopiedSnapshot() {
-  return typeof window !== "undefined" && localStorage.getItem("streamsync_obs_copied") === "true";
+  return typeof window !== "undefined" ? localStorage.getItem("streamsync_obs_copied_widget") : null;
 }
 
 function getServerCopiedSnapshot() {
-  return false;
+  return null;
 }
 
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [platforms, setPlatforms] = useState<string[]>([]);
-  const [widget, setWidget] = useState<WidgetInfo | null>(null);
+  const [widget, setWidget] = useState<WidgetRecord | null>(null);
+  const [widgetError, setWidgetError] = useState("");
   const origin = useOrigin();
-  const [copied, setCopied] = useState(false);
-  const [localCopied, setLocalCopied] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const isCopiedInStorage = useSyncExternalStore(
     subscribeStorage,
     getCopiedSnapshot,
     getServerCopiedSnapshot
   );
-  const hasCopied = isCopiedInStorage || localCopied;
+  const hasCopied = Boolean(widget && (isCopiedInStorage === widget.id || copiedId === widget.id));
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   const { success, error: toastError } = useToast();
 
   useEffect(() => {
-    async function loadData() {
+    let mounted = true;
+    let request = 0;
+    const supabase = createClient();
+    const authTimers = new Set<ReturnType<typeof setTimeout>>();
+
+    async function revalidate() {
+      const currentRequest = ++request;
+      setWidget(null);
+      setPlatforms([]);
+      setCopiedId(null);
+      setWidgetError("");
+      setLoading(true);
       try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (user) {
-          const [tokensRes, widgetRes] = await Promise.all([
-            supabase.from("platform_tokens").select("platform"),
-            supabase
-              .from("widgets")
-              .select("id, theme, font_size")
-              .eq("user_id", user.id)
-              .maybeSingle(),
-          ]);
-
-          if (tokensRes.data) {
-            setPlatforms(tokensRes.data.map((p) => p.platform));
-          }
-
-          if (widgetRes.data) {
-            setWidget(widgetRes.data);
-          }
-        }
+        const { data: { user }, error: authError } = await supabase.auth.getUser();
+        if (!mounted || currentRequest !== request) return;
+        if (authError) throw new Error(authError.message);
+        if (!user) return;
+        const [tokensRes, canonical] = await Promise.all([
+          supabase.from("platform_tokens").select("platform"),
+          resolveAccountWidget(),
+        ]);
+        if (!mounted || currentRequest !== request) return;
+        if (tokensRes.data) setPlatforms(tokensRes.data.map((p) => p.platform));
+        setWidget(canonical);
       } catch (err) {
-        console.error("Failed to load dashboard data:", err);
+        if (mounted && currentRequest === request) {
+          setWidgetError(err instanceof Error ? err.message : "Failed to load widgets.");
+        }
       } finally {
-        setLoading(false);
+        if (mounted && currentRequest === request) setLoading(false);
       }
     }
 
-    loadData();
+    const onFocus = () => { void revalidate(); };
+    window.addEventListener("focus", onFocus);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      const timer = setTimeout(() => {
+        authTimers.delete(timer);
+        if (mounted) void revalidate();
+      }, 0);
+      authTimers.add(timer);
+    });
+    void revalidate();
+    return () => {
+      mounted = false;
+      request += 1;
+      window.removeEventListener("focus", onFocus);
+      subscription.unsubscribe();
+      authTimers.forEach(clearTimeout);
+    };
   }, []);
 
   const widgetUrl =
     widget?.id && origin ? `${origin}/widget/${widget.id}` : "";
 
   const handleCopy = async () => {
-    if (!widgetUrl) {
+    if (!widgetUrl || !widget) {
       toastError("Widget not yet generated. Visit widget settings to create one.");
       return;
     }
+    const currentId = widget.id;
     try {
       await navigator.clipboard.writeText(widgetUrl);
-      setCopied(true);
-      setLocalCopied(true);
+      setCopiedId(currentId);
       if (typeof window !== "undefined") {
-        localStorage.setItem("streamsync_obs_copied", "true");
+        localStorage.setItem("streamsync_obs_copied_widget", currentId);
       }
       success("Widget URL copied to clipboard!");
-      setTimeout(() => setCopied(false), 2000);
+      setTimeout(() => setCopiedId((id) => id === currentId ? null : id), 2000);
     } catch {
       toastError("Failed to copy URL to clipboard.");
     }
@@ -114,7 +126,7 @@ export default function DashboardPage() {
 
   const isStep1Done = platforms.length > 0;
   const isStep2Done = Boolean(widget?.id);
-  const isStep3Done = hasCopied;
+  const isStep3Done = hasCopied && Boolean(widget);
 
   const completedCount =
     (isStep1Done ? 1 : 0) + (isStep2Done ? 1 : 0) + (isStep3Done ? 1 : 0);
@@ -130,6 +142,8 @@ export default function DashboardPage() {
           Welcome to StreamSync. Complete the setup steps below to get your unified chat into OBS.
         </p>
       </div>
+
+      {widgetError && <p role="alert" className="rounded-md border border-destructive p-4 text-sm text-destructive">{widgetError}</p>}
 
       {/* Setup Progress Checklist Card */}
       <div className="p-6 bg-card rounded-lg border border-border flex flex-col gap-6">
@@ -281,7 +295,7 @@ export default function DashboardPage() {
                   disabled={!widgetUrl}
                   className="w-full text-xs flex items-center justify-center gap-1.5"
                 >
-                  {copied ? (
+                  {copiedId === widget?.id ? (
                     <>
                       <Check className="h-3.5 w-3.5 text-primary" />
                       Copied to Clipboard!

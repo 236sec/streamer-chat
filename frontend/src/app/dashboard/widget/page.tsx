@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { PinDashboard } from "@/components/widget/PinDashboard";
 import { WidgetClient } from "@/components/widget/WidgetClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,82 +11,167 @@ import { useToast } from "@/components/ui/toast";
 import { ObsSetupGuideModal } from "@/components/obs/ObsSetupGuideModal";
 import { useOrigin } from "@/lib/use-origin";
 import { Copy, Check, HelpCircle, Save } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { resolveAccountWidget, type WidgetRecord } from "@/lib/widget-selection";
 
 export default function WidgetSettingsPage() {
-  const [widgetId, setWidgetId] = useState("loading...");
+  const [widgetId, setWidgetId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState("");
   const [theme, setTheme] = useState("dark");
   const [fontSize, setFontSize] = useState("16px");
   const [backgroundColor, setBackgroundColor] = useState("transparent");
+  const [autoHideSeconds, setAutoHideSeconds] = useState<number>(0);
+  const [layoutStyle, setLayoutStyle] = useState<string>("card");
   const [width, setWidth] = useState("400");
   const [height, setHeight] = useState("600");
   const origin = useOrigin();
   const [isSaving, setIsSaving] = useState(false);
   const [copied, setCopied] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const accountRef = useRef<string | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
 
   const { success, error: toastError } = useToast();
 
+  const selectWidget = useCallback((widget: WidgetRecord) => {
+    selectedIdRef.current = widget.id;
+    setWidgetId(widget.id);
+    setTheme(widget.theme ?? "dark");
+    setFontSize(widget.font_size ?? "16px");
+    setBackgroundColor(widget.background_color ?? "transparent");
+    setAutoHideSeconds(widget.auto_hide_seconds ?? 0);
+    setLayoutStyle(widget.layout_style ?? "card");
+  }, []);
+
+  const clearWidget = useCallback(() => {
+    selectedIdRef.current = null;
+    setWidgetId(null);
+    setCopied(false);
+    setTheme("dark");
+    setFontSize("16px");
+    setBackgroundColor("transparent");
+    setAutoHideSeconds(0);
+    setLayoutStyle("card");
+  }, []);
+
+  const clearAccount = useCallback(() => {
+    accountRef.current = null;
+    clearWidget();
+  }, [clearWidget]);
 
   useEffect(() => {
-    const fetchWidget = async () => {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) return;
+    let mounted = true;
+    let request = 0;
+    const supabase = createClient();
+    const authTimers = new Set<ReturnType<typeof setTimeout>>();
 
-      const { data, error } = await supabase
-        .from("widgets")
-        .select("id, theme, font_size, background_color")
-        .eq("user_id", user.id)
-        .single();
-
-      if (data) {
-        setWidgetId(data.id);
-        if (data.theme) setTheme(data.theme);
-        if (data.font_size) setFontSize(data.font_size);
-        if (data.background_color) setBackgroundColor(data.background_color);
-      } else if (error && error.code === "PGRST116") {
-        // Record not found, create new widget
-        const { data: newWidget, error: insertError } = await supabase
-          .from("widgets")
-          .insert({ user_id: user.id })
-          .select("id, theme, font_size, background_color")
-          .single();
-        if (newWidget) {
-          setWidgetId(newWidget.id);
-          if (newWidget.theme) setTheme(newWidget.theme);
-          if (newWidget.font_size) setFontSize(newWidget.font_size);
-          if (newWidget.background_color) setBackgroundColor(newWidget.background_color);
-        } else if (insertError) {
-          toastError(insertError.message || "Failed to initialize widget.", "Widget Setup Failed");
+    const revalidate = async () => {
+      const currentRequest = ++request;
+      let sameAccountConfirmed = false;
+      setLoadError("");
+      try {
+        const {
+          data: { user },
+          error: authError,
+        } = await supabase.auth.getUser();
+        if (!mounted || currentRequest !== request) return;
+        if (authError) throw new Error(authError.message);
+        if (!user) throw new Error("Sign in to load your widgets.");
+        sameAccountConfirmed = accountRef.current === user.id;
+        if (accountRef.current !== user.id) {
+          clearAccount();
+          accountRef.current = user.id;
         }
-      } else if (error) {
-        toastError(error.message || "Failed to load widget settings.", "Loading Failed");
+        const canonical = await resolveAccountWidget();
+        if (!mounted || currentRequest !== request) return;
+        if (canonical.id !== selectedIdRef.current) {
+          clearWidget();
+          selectWidget(canonical);
+        }
+      } catch (cause) {
+        if (!mounted || currentRequest !== request) return;
+        if (!sameAccountConfirmed) clearAccount();
+        const message = cause instanceof Error ? cause.message : "Failed to load widget settings.";
+        setLoadError(message);
+        toastError(message, "Loading Failed");
       }
     };
-    fetchWidget();
-  }, [toastError]);
+    const onFocus = () => { void revalidate(); };
+    window.addEventListener("focus", onFocus);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || (accountRef.current && session?.user.id && session.user.id !== accountRef.current)) {
+        request += 1;
+        clearAccount();
+      }
+      if (event === "INITIAL_SESSION" || (event === "TOKEN_REFRESHED" && session?.user.id === accountRef.current)) return;
+      const timer = setTimeout(() => {
+        authTimers.delete(timer);
+        if (mounted) void revalidate();
+      }, 0);
+      authTimers.add(timer);
+    });
+    void revalidate();
+    return () => {
+      mounted = false;
+      request += 1;
+      window.removeEventListener("focus", onFocus);
+      subscription.unsubscribe();
+      authTimers.forEach(clearTimeout);
+    };
+  }, [toastError, clearAccount, clearWidget, selectWidget]);
 
+  const queryParams = new URLSearchParams();
+  if (autoHideSeconds > 0) {
+    queryParams.set("auto_hide_seconds", String(autoHideSeconds));
+  }
+  if (layoutStyle && layoutStyle !== "card") {
+    queryParams.set("layout_style", layoutStyle);
+  }
+  const queryString = queryParams.toString();
   const widgetUrl =
-    origin && widgetId !== "loading..." ? `${origin}/widget/${widgetId}` : "";
+    origin && widgetId
+      ? `${origin}/widget/${widgetId}${queryString ? `?${queryString}` : ""}`
+      : "";
 
   const handleSave = async () => {
-    if (!widgetId || widgetId === "loading...") return;
+    if (!widgetId) return;
     setIsSaving(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase
+      const updatePayload: Record<string, unknown> = {
+        theme,
+        font_size: fontSize,
+        background_color: backgroundColor,
+        auto_hide_seconds: autoHideSeconds,
+        layout_style: layoutStyle,
+      };
+
+      let { error } = await supabase
         .from("widgets")
-        .update({
-          theme,
-          font_size: fontSize,
-          background_color: backgroundColor,
-        })
+        .update(updatePayload)
         .eq("id", widgetId);
+
+      let usedFallback = false;
+      if (error && (error.message.includes("auto_hide_seconds") || error.message.includes("layout_style"))) {
+        const fallbackRes = await supabase
+          .from("widgets")
+          .update({
+            theme,
+            font_size: fontSize,
+            background_color: backgroundColor,
+          })
+          .eq("id", widgetId);
+        error = fallbackRes.error;
+        usedFallback = true;
+      }
 
       if (error) {
         toastError(error.message || "Failed to save widget settings.", "Save Failed");
+      } else if (usedFallback) {
+        success(
+          "Saved! Settings are encoded in your Widget URL. Run migration in Supabase SQL editor to store in DB.",
+          "Settings Saved"
+        );
       } else {
         success("Widget appearance saved successfully.", "Changes Saved");
       }
@@ -109,7 +195,7 @@ export default function WidgetSettingsPage() {
   };
 
   return (
-    <div className="flex flex-col gap-6 h-full">
+    <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-heading font-bold text-foreground">
@@ -129,13 +215,15 @@ export default function WidgetSettingsPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
+      {loadError && <p role="alert" className="rounded-md border border-destructive p-4 text-sm text-destructive">{loadError}</p>}
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Settings Panel */}
-        <div className="p-6 bg-card rounded-lg border border-border flex flex-col gap-6 lg:col-span-1 overflow-y-auto max-h-[calc(100vh-8rem)]">
+        <div className="p-6 bg-card rounded-lg border border-border flex flex-col gap-6 lg:col-span-1">
           <div>
             <h2 className="text-xl font-semibold mb-2">Appearance</h2>
             <p className="text-muted-foreground text-sm mb-4">
-              Customize font size, theme, and background transparency.
+              Customize font size, theme, layout style, and auto-hide timing.
             </p>
           </div>
 
@@ -151,6 +239,51 @@ export default function WidgetSettingsPage() {
                 <option value="dark">Dark</option>
                 <option value="light">Light</option>
               </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="layoutStyle">Layout Preset</Label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { id: "card", label: "Card" },
+                  { id: "bubble", label: "Bubble" },
+                  { id: "clean", label: "Clean" },
+                ].map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => setLayoutStyle(preset.id)}
+                    className={cn(
+                      "px-3 py-2 text-sm font-medium rounded-md border transition-colors",
+                      layoutStyle === preset.id
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-background hover:bg-secondary text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="autoHide">Auto-Hide Duration</Label>
+              <select
+                id="autoHide"
+                value={autoHideSeconds}
+                onChange={(e) => setAutoHideSeconds(Number(e.target.value))}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value={0}>Disabled (Permanent)</option>
+                <option value={5}>5 seconds</option>
+                <option value={10}>10 seconds</option>
+                <option value={15}>15 seconds</option>
+                <option value={30}>30 seconds</option>
+                <option value={60}>60 seconds</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Messages smoothly fade out after this duration.
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -175,7 +308,7 @@ export default function WidgetSettingsPage() {
 
             <Button
               onClick={handleSave}
-              disabled={isSaving || widgetId === "loading..."}
+              disabled={isSaving || !widgetId}
               className="w-full flex items-center justify-center gap-2 mt-2"
             >
               <Save className="h-4 w-4" />
@@ -253,7 +386,7 @@ export default function WidgetSettingsPage() {
             </span>
           </div>
 
-          <div className="flex-1 rounded-md border border-dashed border-border overflow-auto relative bg-background/30 flex items-center justify-center p-8">
+          <div className="flex-1 rounded-md border border-dashed border-border overflow-auto relative bg-background/30 flex p-8">
             {/* Checkerboard background for transparent preview */}
             <div
               className="absolute inset-0 z-0 opacity-10 pointer-events-none"
@@ -265,20 +398,24 @@ export default function WidgetSettingsPage() {
               }}
             />
             <div
-              className="relative z-10 shadow-2xl border border-border/50 bg-background/50 flex-shrink-0"
+              className="relative z-10 shadow-2xl border border-border/50 bg-background/50 flex-shrink-0 m-auto"
               style={{ width: `${width}px`, height: `${height}px` }}
             >
               <WidgetClient
-                widgetId={widgetId}
+                widgetId={widgetId ?? ""}
                 theme={theme}
                 fontSize={fontSize}
                 backgroundColor={backgroundColor}
+                autoHideSeconds={autoHideSeconds}
+                layoutStyle={layoutStyle}
                 mock={true}
               />
             </div>
           </div>
         </div>
       </div>
+
+      {widgetId && <PinDashboard key={widgetId} widgetId={widgetId} />}
 
       <ObsSetupGuideModal
         isOpen={isGuideOpen}

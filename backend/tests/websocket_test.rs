@@ -82,3 +82,74 @@ async fn test_widget_reconnect_lifecycle() {
 
     let _ = ws_stream2.close(None).await;
 }
+
+#[tokio::test]
+async fn widget_connections_share_session_and_route_by_widget() {
+    let state = Arc::new(AppState::default());
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = create_router(state.clone());
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let (mut first, _) = connect_async(format!("ws://{address}/ws/widget/first?mock=true"))
+        .await
+        .unwrap();
+    // Consume the first tick before subscribing the second connection.
+    let initial = tokio::time::timeout(tokio::time::Duration::from_secs(3), first.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(initial.to_text().unwrap()).unwrap()["widget_id"],
+        "first"
+    );
+    let (mut second, _) = connect_async(format!("ws://{address}/ws/widget/first?mock=true"))
+        .await
+        .unwrap();
+    let (mut other, _) = connect_async(format!("ws://{address}/ws/widget/other?mock=true"))
+        .await
+        .unwrap();
+    assert_eq!(state.session_count(), 2);
+    assert_eq!(state.session_connection_count("first"), Some(2));
+    assert_eq!(state.session_run_generation("first"), Some(1));
+    let (first_frame, second_frame, other_frame) =
+        tokio::time::timeout(tokio::time::Duration::from_secs(3), async {
+            tokio::join!(first.next(), second.next(), other.next())
+        })
+        .await
+        .unwrap();
+    let first_message: serde_json::Value =
+        serde_json::from_str(first_frame.unwrap().unwrap().to_text().unwrap()).unwrap();
+    let second_message: serde_json::Value =
+        serde_json::from_str(second_frame.unwrap().unwrap().to_text().unwrap()).unwrap();
+    let other_message: serde_json::Value =
+        serde_json::from_str(other_frame.unwrap().unwrap().to_text().unwrap()).unwrap();
+    assert_eq!(first_message["widget_id"], "first");
+    assert_eq!(first_message, second_message);
+    assert_eq!(other_message["widget_id"], "other");
+    first.close(None).await.unwrap();
+    tokio::time::timeout(tokio::time::Duration::from_secs(1), async {
+        while state.session_connection_count("first") != Some(1) {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    let frame = tokio::time::timeout(tokio::time::Duration::from_secs(3), second.next())
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+    let message: serde_json::Value = serde_json::from_str(frame.to_text().unwrap()).unwrap();
+    assert_eq!(message["widget_id"], "first");
+    second.close(None).await.unwrap();
+    tokio::time::timeout(tokio::time::Duration::from_secs(1), async {
+        while state.session_identity("first").is_some() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(state.session_count(), 1);
+    other.close(None).await.unwrap();
+}
