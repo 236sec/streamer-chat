@@ -245,7 +245,24 @@ Every ticket uses this structure:
 
 ---
 
+## 17: Viewer Count OBS Widget
+
+**What to build:** A separate public OBS source displays current Twitch, YouTube, and Kick viewer counts for the account's canonical widget, with a refresh interval configured by the Rust backend.
+
+**Blocked by:** 16: One Permanent Widget UUID Per Account.
+
+**Status:** done
+
+- [x] The source shows three labeled platform counts and displays zero when a count is offline, missing, or unavailable.
+- [x] Canonical and legacy widget UUIDs resolve to the same viewer-count source without starting chat workers.
+- [x] The backend reads `VIEWER_COUNT_REFRESH_SECONDS` from its environment, defaults to 60 seconds, and returns the validated interval to the source.
+- [x] Widget Settings provides the source URL, copy action, and live preview.
+- [x] Backend tests, frontend lint, the approved production build substitute, format, Clippy, and Rust tests pass; independent review found no remaining Critical or Important defects.
+
+---
+
 ## Verification Commands
+
 
 | Step | Command | Purpose |
 | ---- | ------- | ------- |

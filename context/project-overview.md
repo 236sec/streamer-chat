@@ -39,6 +39,7 @@ A unified chat display application for streamers that aggregates chat events fro
 - Basic chat widget customization
 - User authentication via Supabase
 - OBS browser source support via public unique widget URL
+- Separate OBS viewer-count source for Twitch, YouTube, and Kick under the same widget identity
 
 ### Out of Scope
 

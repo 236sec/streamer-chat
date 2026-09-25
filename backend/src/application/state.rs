@@ -1,3 +1,4 @@
+use crate::application::viewer_count::ViewerCountService;
 use crate::domain::message::ChatMessage;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -61,6 +62,7 @@ pub struct AppState {
     pub pin_locks: Arc<RwLock<HashMap<String, Arc<Mutex<()>>>>>,
     pub pin_command_secret: String,
     pub master_key: String,
+    pub viewer_count_service: ViewerCountService,
 }
 
 impl Default for AppState {
@@ -74,6 +76,7 @@ impl Default for AppState {
             pin_command_secret: std::env::var("PIN_COMMAND_SECRET").unwrap_or_default(),
             master_key: std::env::var("MASTER_DECRYPTION_KEY")
                 .unwrap_or_else(|_| "0123456789abcdef0123456789abcdef".to_string()),
+            viewer_count_service: ViewerCountService::new(60, std::time::Duration::from_secs(4)),
         }
     }
 }
@@ -84,6 +87,12 @@ impl AppState {
             pool: Some(pool),
             ..Self::default()
         }
+    }
+
+    pub fn with_viewer_count_refresh_seconds(mut self, seconds: u64) -> Self {
+        self.viewer_count_service =
+            ViewerCountService::new(seconds, std::time::Duration::from_secs(4));
+        self
     }
 
     pub async fn pin_lock(&self, widget_id: &str) -> Arc<Mutex<()>> {

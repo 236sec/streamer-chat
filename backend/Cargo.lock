@@ -184,6 +184,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite 0.21.0",
  "tokio-util",
+ "tower",
  "uuid",
 ]
 
@@ -1521,6 +1522,7 @@ dependencies = [
  "rustls-platform-verifier",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tokio-rustls 0.26.5",

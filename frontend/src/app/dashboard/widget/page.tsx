@@ -13,6 +13,7 @@ import { useOrigin } from "@/lib/use-origin";
 import { Copy, Check, HelpCircle, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveAccountWidget, type WidgetRecord } from "@/lib/widget-selection";
+import { ViewerCountClient } from "@/components/widget/ViewerCountClient";
 
 export default function WidgetSettingsPage() {
   const [widgetId, setWidgetId] = useState<string | null>(null);
@@ -27,6 +28,7 @@ export default function WidgetSettingsPage() {
   const origin = useOrigin();
   const [isSaving, setIsSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [viewerCopied, setViewerCopied] = useState(false);
   const [isGuideOpen, setIsGuideOpen] = useState(false);
   const accountRef = useRef<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
@@ -132,6 +134,7 @@ export default function WidgetSettingsPage() {
     origin && widgetId
       ? `${origin}/widget/${widgetId}${queryString ? `?${queryString}` : ""}`
       : "";
+  const viewerUrl = origin && widgetId ? `${origin}/widget/${widgetId}/viewers` : "";
 
   const handleSave = async () => {
     if (!widgetId) return;
@@ -191,6 +194,18 @@ export default function WidgetSettingsPage() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toastError("Failed to copy URL to clipboard.");
+    }
+  };
+
+  const handleCopyViewer = async () => {
+    if (!viewerUrl) return;
+    try {
+      await navigator.clipboard.writeText(viewerUrl);
+      setViewerCopied(true);
+      success("Viewer count URL copied to clipboard!", "Copied");
+      setTimeout(() => setViewerCopied(false), 2000);
+    } catch {
+      toastError("Failed to copy viewer count URL to clipboard.");
     }
   };
 
@@ -344,6 +359,17 @@ export default function WidgetSettingsPage() {
           </div>
 
           <div className="mt-4 pt-4 border-t border-border">
+            <h2 className="text-lg font-semibold mb-2">Viewer Count OBS Source</h2>
+            <p className="text-muted-foreground text-sm mb-4">Add this URL as a separate OBS Browser Source. It shows Twitch, YouTube, and Kick counts and refreshes automatically.</p>
+            <div className="flex gap-2">
+              <Input readOnly value={viewerUrl || "Generating..."} className="font-mono text-xs" aria-label="Viewer count source URL" />
+              <Button onClick={handleCopyViewer} disabled={!viewerUrl} variant="secondary" className="shrink-0 flex items-center gap-1.5">
+                {viewerCopied ? <><Check className="h-4 w-4 text-primary" />Copied!</> : <><Copy className="h-4 w-4" />Copy</>}
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-border">
             <h2 className="text-xl font-semibold mb-2">Widget URL</h2>
             <p className="text-muted-foreground text-sm mb-4">
               Copy this URL and add it as a Browser Source in OBS.
@@ -410,6 +436,12 @@ export default function WidgetSettingsPage() {
                 layoutStyle={layoutStyle}
                 mock={true}
               />
+            </div>
+          </div>
+          <div className="mt-5 rounded-md border border-border bg-background/30 p-6">
+            <h3 className="mb-3 text-sm font-semibold">Viewer Count Source Preview</h3>
+            <div className="inline-block rounded-md border border-dashed border-border bg-transparent p-3">
+              {widgetId ? <ViewerCountClient widgetId={widgetId} /> : <div className="flex flex-col gap-2">{["Twitch", "YouTube", "Kick"].map((platform) => <div key={platform} className="flex min-w-40 justify-between rounded-md border border-border bg-card/80 px-4 py-3 text-sm"><span>{platform}</span><span className="font-mono">0</span></div>)}</div>}
             </div>
           </div>
         </div>

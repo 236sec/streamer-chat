@@ -16,6 +16,8 @@
 - `frontend/` — Next.js frontend, responsible for user auth, dashboard UI, widget configuration UI, and rendering the OBS widget overlay.
 - `backend/` — Rust backend, responsible for maintaining persistent WebSocket connections to external platforms (Twitch, Kick, YouTube), parsing incoming messages, and broadcasting them.
 
+The separate public viewer-count source reads a narrow HTTP endpoint through the Next.js BFF. The Rust application service owns canonical-widget count orchestration and coalescing; infrastructure adapters own token lookup/decryption and platform HTTP calls. The backend environment variable `VIEWER_COUNT_REFRESH_SECONDS` controls the source's read interval, defaulting to 60 seconds. Count reads do not start chat ingestion workers, and no viewer history is stored.
+
 Within the Rust backend, one widget session owns each active widget's broadcast channel, ingestion worker run, and final-connection cleanup. The application pin module owns validated pin transitions and persisted snapshot preparation. The web transport owns authorization, status mapping, and socket I/O; the PostgreSQL adapter owns pin storage queries. Widget subscribers register before snapshot loading, and the snapshot is sent before queued live events.
 
 An OBS socket opened before its account's first identity mapping checks for that mapping every five seconds. Once mapping exists, it acquires the canonical session, sends the canonical pin snapshot, and releases the old session and worker without requiring an OBS refresh. The checks stop after mapping. Existing widget worker cancellation and YouTube polling lifecycle remain owned by the session.
