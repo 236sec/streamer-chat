@@ -15,8 +15,9 @@ aes-gcm = "0.11.1"
 base64 = "0.23.1"
 uuid = { version = "1.26.1", features = ["v4", "serde"] }
 tokio-tungstenite = { version = "0.21", features = ["rustls-tls-native-roots"] }
-reqwest = { version = "0.13.5", features = ["json", "rustls"] }
+reqwest = { version = "0.13.5", features = ["json", "rustls", "query", "form"] }
 tokio-util = { version = "0.7", features = ["rt"] }
 
 [dev-dependencies]
 tokio-tungstenite = "0.21"
+tower = { version = "0.5.3", features = ["util"] }

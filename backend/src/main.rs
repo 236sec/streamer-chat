@@ -14,7 +14,12 @@ async fn main() {
         .await
         .expect("Failed to connect to the database");
 
-    let state = Arc::new(AppState::new(pool));
+    let refresh_seconds = backend::application::viewer_count::refresh_seconds_from(
+        std::env::var("VIEWER_COUNT_REFRESH_SECONDS")
+            .ok()
+            .as_deref(),
+    );
+    let state = Arc::new(AppState::new(pool).with_viewer_count_refresh_seconds(refresh_seconds));
 
     let app = create_router(state);
     let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();

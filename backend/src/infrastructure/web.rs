@@ -26,10 +26,80 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/ws", get(ws_handler_global))
         .route("/ws/widget/:id", get(ws_handler_widget))
         .route(
+            "/public/widgets/:id/viewer-counts",
+            get(viewer_count_handler),
+        )
+        .route(
             "/internal/widgets/:id/pin",
             post(pin_handler).layer(DefaultBodyLimit::max(16 * 1024)),
         )
         .with_state(state)
+}
+
+async fn viewer_count_handler(
+    Path(id): Path<String>,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<crate::application::viewer_count::ViewerCountResponse>, StatusCode> {
+    let addressed = uuid::Uuid::parse_str(&id).map_err(|_| StatusCode::BAD_REQUEST)?;
+    let pool = state.pool.as_ref().ok_or(StatusCode::SERVICE_UNAVAILABLE)?;
+    let repository = super::viewer_count::PostgresViewerCountRepository {
+        pool,
+        master_key: &state.master_key,
+    };
+    let platforms = super::viewer_count::HttpPlatformViewerCounts::from_env()
+        .map_err(|_| StatusCode::SERVICE_UNAVAILABLE)?;
+    state
+        .viewer_count_service
+        .read(&repository, &platforms, addressed)
+        .await
+        .map(Json)
+        .map_err(|error| match error {
+            crate::application::viewer_count::ViewerCountError::NotFound => StatusCode::NOT_FOUND,
+            crate::application::viewer_count::ViewerCountError::Unavailable => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+            crate::application::viewer_count::ViewerCountError::Timeout => {
+                StatusCode::GATEWAY_TIMEOUT
+            }
+        })
+}
+
+#[cfg(test)]
+mod viewer_count_route_tests {
+    use super::create_router;
+    use crate::application::state::AppState;
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use std::sync::Arc;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn viewer_count_route_validates_uuid_before_backend_lookup() {
+        let app = create_router(Arc::new(AppState::default()));
+        let invalid = app
+            .clone()
+            .oneshot(
+                Request::get("/public/widgets/not-a-uuid/viewer-counts")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(invalid.status(), StatusCode::BAD_REQUEST);
+
+        let valid_id = uuid::Uuid::new_v4();
+        let valid = app
+            .oneshot(
+                Request::get(format!("/public/widgets/{valid_id}/viewer-counts"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(valid.status(), StatusCode::SERVICE_UNAVAILABLE);
+    }
 }
 
 async fn ws_handler_global(

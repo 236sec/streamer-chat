@@ -19,6 +19,7 @@ Tracks every UI component built.
 | PinDashboard | `frontend/src/components/widget/PinDashboard.tsx` | Live dashboard feed with pin controls, status, highlight URL, and OBS size guidance | Card / Live Feed Pattern |
 | HighlightClient | `frontend/src/components/widget/HighlightClient.tsx` | Public OBS overlay for the active pinned message with entry and exit transitions | Transparent Overlay / Transition Pattern |
 | Widget Settings | `frontend/src/app/dashboard/widget/page.tsx` | Configures the account's one canonical widget and its OBS chat and highlight sources | Card / Form / Live Preview Pattern |
+| ViewerCountClient | `frontend/src/components/widget/ViewerCountClient.tsx` | Shows platform viewer counts in the OBS source and Widget Settings preview | Transparent Overlay / Three-Row Count Pattern |
 
 The public chat widget page marks its document with `.widget-source` so the page background stays transparent. The configured background remains on the inner `WidgetClient` overlay. The Widget Settings page uses the dashboard's main scroller for its controls, preview, and highlight panel.
 
@@ -41,3 +42,18 @@ Last updated: 2026-09-24
 | Accent usage | `bg-primary/10 text-primary` selected layout preset |
 
 **Pattern notes:** Resolve one canonical widget before enabling source URLs and pin controls. Show only its chat URL in the copy field. The PinDashboard uses the same UUID for its highlight URL and pin events. There is no widget selector.
+
+### Viewer Count Source
+
+File: `frontend/src/components/widget/ViewerCountClient.tsx`
+Last updated: 2026-09-25
+
+| Property | Class |
+| --- | --- |
+| Background | `bg-transparent` source; `bg-card/80` count rows |
+| Border | `border border-border` rows |
+| Border radius | `rounded-md` rows |
+| Text | `text-foreground` source; `text-sm font-medium` labels; `font-mono text-lg tabular-nums` values |
+| Spacing | `gap-2` between rows; `px-4 py-3` within rows |
+
+**Pattern notes:** Keep Twitch, YouTube, and Kick rows visible in that order. Show zero for missing or failed counts. The public source uses `.widget-source` for a transparent page; the dashboard preview embeds the same component.
